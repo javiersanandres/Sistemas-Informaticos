@@ -73,7 +73,7 @@ async def delete_user(username):
     auth_split = auth_token.split(" ")
     if auth_split[0] == "Bearer":
         try:
-            with open(utils.build_absolute_path('user/'+username+'.json'), 'r') as file:
+            with open(utils.build_absolute_path('user/' + username + '.json'), 'r') as file:
                 data = json.load(file)
             access_token = str(data['access_token'])
             if access_token != auth_split[1]:
