@@ -1,13 +1,17 @@
-from quart import Quart
 import argparse
-import utils
 import os
 
+from quart import Quart
+
+import utils
+
 app = Quart(__name__)
+
 
 @app.route('/file/<uuid:UID>')
 async def index(UID):
     return f'Hello, {UID}'
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='file.py')

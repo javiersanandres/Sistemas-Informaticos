@@ -1,10 +1,12 @@
-import quart
-import uuid
+import argparse
 import json
 import os
+import uuid
+
+import quart
 from dotenv import load_dotenv
+
 import utils
-import argparse
 
 load_dotenv()
 app = quart.Quart(__name__)
@@ -22,7 +24,8 @@ async def register_user():
         username = data_json['name']
         password = data_json['password']
     except KeyError as e:
-        html_response = utils.build_bad_request_response(f'Missing field: {str(e)}')
+        html_response = utils.build_bad_request_response(
+            f'Missing field: {str(e)}')
         return quart.Response(html_response, status=400)
 
     # Generate user UUID and access token
@@ -51,7 +54,8 @@ async def login_user():
         username = data_json['name']
         password = data_json['password']
     except KeyError as e:
-        html_response = utils.build_bad_request_response(f'Missing field: {str(e)}')
+        html_response = utils.build_bad_request_response(
+            f'Missing field: {str(e)}')
         return quart.Response(html_response, status=400)
 
     # Fetch user's credentials from file
@@ -64,8 +68,7 @@ async def login_user():
     return quart.jsonify({"uid": user_uuid, "access_token": access_token})
 
 
-'''
-@app.route('/user/<str:username>', methods=['DELETE'])
+@app.route('/user/<username>', methods=['DELETE'])
 async def delete_user(username):
     """
     Deletes an already registered user. This function also deletes the library
@@ -82,13 +85,12 @@ async def delete_user(username):
                 return quart.Response(utils.build_unauthorized_response(), status=401)
             else:
                 # Try first to delete the library associated
-                print("TODO")                         
+                print("TODO")
         except:
             return quart.Response(utils.build_not_found_response(), status=404)
 
     else:
         return quart.Response(utils.build_bad_request_response(), status=400)
-'''
 
 
 def generate_user_uuid_and_access_token() -> tuple:
@@ -107,7 +109,7 @@ def generate_user_file(username: str,
                        user_uuid: uuid.UUID,
                        access_token: uuid.UUID) -> None:
     """
-    Generates a file with the user's info. 
+    Generates a file with the user's info.
     """
     filepath = utils.build_absolute_path(f'user/{username}.txt')
 
@@ -136,14 +138,22 @@ def get_user_credentials(username: str,
         with open(filepath, 'r') as f:
             user_data = json.load(f)
             read_password = user_data['password']
-    except:
+    except BaseException:
         print('TODO')
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='user.py')
-    parser.add_argument('--host', default='localhost', help='IP Address for users server.')
-    parser.add_argument('-p', '--port', type=int, default='5005', help='Port number for users server')
+    parser.add_argument(
+        '--host',
+        default='localhost',
+        help='IP Address for users server.')
+    parser.add_argument(
+        '-p',
+        '--port',
+        type=int,
+        default='5005',
+        help='Port number for users server')
     args = parser.parse_args()
 
     # Create user directory if it does not exist

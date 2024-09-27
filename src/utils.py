@@ -12,7 +12,7 @@ def build_absolute_path(relative_filepath: str) -> str:
     return filepath
 
 
-def build_bad_request_response(reason: str="") -> str:
+def build_bad_request_response(reason: str = "") -> str:
     """
     Builds an HTML response for a bad request.
     """
@@ -21,7 +21,7 @@ def build_bad_request_response(reason: str="") -> str:
                     "<title>400 Bad Request</title>\n" \
                     "<h1>Bad Request</h1>\n" \
                     "<p>The browser (or proxy) sent a request that this server could not understand.</p>"
-    
+
     if reason:
         response_html += f"\n<p>{reason}<\p>"
 
@@ -33,35 +33,36 @@ def build_not_found_response() -> str:
     Builds an HTML response for not found error.
     """
     response_html = "<!DOCTYPE html>\n" \
-            "<html lang=\"en\">\n" \
-            "<head>\n" \
-            "    <meta charset=\"UTF-8\">\n" \
-            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" \
-            "    <title>404 Not Found</title>\n" \
-            "</head>\n" \
-            "<body>\n" \
-            "    <h1>404 Not Found</h1>\n"\
-            "    <p>The requested resource could not be found on this server.</p>\n"\
-            "</body>\n"\
-            "</html>\n"
-    
+                    "<html lang=\"en\">\n" \
+                    "<head>\n" \
+                    "    <meta charset=\"UTF-8\">\n" \
+                    "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" \
+                    "    <title>404 Not Found</title>\n" \
+                    "</head>\n" \
+                    "<body>\n" \
+                    "    <h1>404 Not Found</h1>\n" \
+                    "    <p>The requested resource could not be found on this server.</p>\n" \
+                    "</body>\n" \
+                    "</html>\n"
+
     return response_html
+
 
 def build_unauthorized_response() -> str:
     """
     Builds an HTML response for unathorised error.
     """
     response_html = "<!DOCTYPE html>\n" \
-            "<html lang=\"en\">\n" \
-            "<head>\n" \
-            "    <meta charset=\"UTF-8\">\n" \
-            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" \
-            "    <title>401 Unauthorized</title>\n" \
-            "</head>\n" \
-            "<body>\n" \
-            "    <h1>401 Unauthorized</h1>\n"\
-            "    <p> You are not authorized to access this page. </p>\n"\
-            "</body>\n"\
-            "</html>\n"
-    
+                    "<html lang=\"en\">\n" \
+                    "<head>\n" \
+                    "    <meta charset=\"UTF-8\">\n" \
+                    "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" \
+                    "    <title>401 Unauthorized</title>\n" \
+                    "</head>\n" \
+                    "<body>\n" \
+                    "    <h1>401 Unauthorized</h1>\n" \
+                    "    <p> You are not authorized to access this page. </p>\n" \
+                    "</body>\n" \
+                    "</html>\n"
+
     return response_html

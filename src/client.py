@@ -1,10 +1,11 @@
-import requests
 import json
 import uuid
 
+import requests
+
 user_url = 'http://localhost:5000/user'
 headers = {"Content-Type": "application/json"}
-data = {"name":"hola"}
+data = {"name": "hola"}
 uid = uuid.uuid4()
 r = requests.put(url=user_url,
                  headers=headers,
