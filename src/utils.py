@@ -5,7 +5,8 @@ def build_absolute_path(relative_filepath: str) -> str:
     """
     Build and absolute path for a given filepath.
     """
-    absolute_path = os.path.dirname(os.path.abspath(__file__))
+
+    absolute_path = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
     filepath = os.path.join(absolute_path, relative_filepath)
 
     return filepath

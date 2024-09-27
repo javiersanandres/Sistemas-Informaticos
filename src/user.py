@@ -4,6 +4,7 @@ import json
 import os
 from dotenv import load_dotenv
 import utils
+import argparse
 
 load_dotenv()
 app = quart.Quart(__name__)
@@ -60,9 +61,10 @@ async def login_user():
         html_response = utils.build_bad_request_response(str(e))
         return quart.Response(html_response, status=400)
 
-    return quart.jsonify({"uid": user_uuid, "acces_token": access_token})
+    return quart.jsonify({"uid": user_uuid, "access_token": access_token})
 
 
+'''
 @app.route('/user/<str:username>', methods=['DELETE'])
 async def delete_user(username):
     """
@@ -86,6 +88,7 @@ async def delete_user(username):
 
     else:
         return quart.Response(utils.build_bad_request_response(), status=400)
+'''
 
 
 def generate_user_uuid_and_access_token() -> tuple:
@@ -111,7 +114,7 @@ def generate_user_file(username: str,
     # Check if user already exists
     if os.path.isfile(filepath):
         raise ValueError(f'The user {username} already exists.')
-    
+
     # Dump data to file as JSON
     user_data = {"username": username,
                  "password": password,
@@ -133,9 +136,16 @@ def get_user_credentials(username: str,
         with open(filepath, 'r') as f:
             user_data = json.load(f)
             read_password = user_data['password']
-    except :
-        
+    except:
+        print('TODO')
 
 
 if __name__ == "__main__":
-    app.run()
+    parser = argparse.ArgumentParser(description='user.py')
+    parser.add_argument('--host', default='localhost', help='IP Address for users server.')
+    parser.add_argument('-p', '--port', type=int, default='5005', help='Port number for users server')
+    args = parser.parse_args()
+
+    # Create user directory if it does not exist
+    os.makedirs(utils.build_absolute_path('user'), exist_ok=True)
+    app.run(host=args.host, port=args.port)
