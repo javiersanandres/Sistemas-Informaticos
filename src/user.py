@@ -1,9 +1,9 @@
-import argparse
 import json
 import os
 import uuid
 
 import quart
+import requests
 from dotenv import load_dotenv
 
 import utils
@@ -27,6 +27,8 @@ async def register_user():
         html_response = utils.build_bad_request_response(
             f'Missing field: {str(e)}')
         return quart.Response(html_response, status=400)
+    except TypeError as e:
+        return quart.Response(utils.build_bad_request_response(), status=400)
 
     # Generate user UUID and access token
     user_uuid, access_token = generate_user_uuid_and_access_token()
@@ -39,7 +41,31 @@ async def register_user():
         html_response = utils.build_bad_request_response(str(e))
         return quart.Response(html_response, status=400)
 
-    return quart.jsonify({"uid": user_uuid, "acces_token": access_token})
+    # Generate users library
+    user_creation_failure = False
+    try:
+        request = requests.put('http://' +
+                               os.getenv('LIBRARY_SERVER_IP') +
+                               ':' +
+                               os.getenv('LIBRARY_SERVER_PORT') +
+                               f'/file/{str(user_uuid)}', headers={"Authorization": 'Bearer ' +
+                                                                   str(os.getenv('SECRET'))})
+        if request.status_code != 200:
+            user_creation_failure = True
+    except requests.exceptions.ConnectionError:
+        user_creation_failure = True
+
+    if user_creation_failure:
+        if os.path.exists(
+                utils.build_absolute_path(
+                    f'user/{username}.json')):
+            os.remove(
+                utils.build_absolute_path(
+                    f'user/{username}.json'))
+
+        return quart.Response(utils.build_internal_server_error(), status=500)
+
+    return quart.jsonify({"uid": user_uuid, "access_token": access_token})
 
 
 @app.route('/user', methods=['GET'])
@@ -57,6 +83,11 @@ async def login_user():
         html_response = utils.build_bad_request_response(
             f'Missing field: {str(e)}')
         return quart.Response(html_response, status=400)
+    except TypeError as e:
+        return quart.Response(
+            utils.build_bad_request_response(
+                f'Missing user name and password.'),
+            status=400)
 
     # Fetch user's credentials from file
     try:
@@ -75,20 +106,50 @@ async def delete_user(username):
     associated to that user by using SAGA pattern.
     """
     auth_token = quart.request.headers.get('Authorization')
+    if auth_token is None:
+        return quart.Response(
+            utils.build_unauthorized_response(), status=401)
+
     auth_split = auth_token.split(" ")
-    if auth_split[0] == "Bearer":
+
+    if auth_split[0] == "Bearer" and len(auth_split) == 2:
         try:
             with open(utils.build_absolute_path('user/' + username + '.json'), 'r') as file:
                 data = json.load(file)
             access_token = str(data['access_token'])
+
             if access_token != auth_split[1]:
-                return quart.Response(utils.build_unauthorized_response(), status=401)
+                return quart.Response(
+                    utils.build_unauthorized_response(), status=401)
             else:
                 # Try first to delete the library associated
-                print("TODO")
-        except:
+                # If there were no answer from the other server, the user
+                # would still be in the system
+                library_url = 'http://' + os.getenv('LIBRARY_SERVER_IP') + ':' + os.getenv(
+                    'LIBRARY_SERVER_PORT') + f'/file/' + str(data['uid'])
+                try:
+                    request = requests.delete(
+                        url=library_url,
+                        headers={"Authorization": 'Bearer ' + str(os.getenv('SECRET'))})
+                    if request.status_code == 200:
+                        # Finally remove the user from the system
+                        if os.path.exists(
+                                utils.build_absolute_path(
+                                    f'user/{username}.json')):
+                            os.remove(
+                                utils.build_absolute_path(
+                                    f'user/{username}.json'))
+                            return quart.Response(
+                                'User successfully deleted', status=200)
+                        else:
+                            return quart.Response(status=404)
+                    else:
+                        return quart.Response(status=500)
+                except requests.exceptions.ConnectionError:
+                    return quart.Response(
+                        utils.build_internal_server_error(), status=500)
+        except OSError:
             return quart.Response(utils.build_not_found_response(), status=404)
-
     else:
         return quart.Response(utils.build_bad_request_response(), status=400)
 
@@ -111,11 +172,11 @@ def generate_user_file(username: str,
     """
     Generates a file with the user's info.
     """
-    filepath = utils.build_absolute_path(f'user/{username}.txt')
+    filepath = utils.build_absolute_path(f'user/{username}.json')
 
     # Check if user already exists
     if os.path.isfile(filepath):
-        raise ValueError(f'The user {username} already exists.')
+        raise ValueError(f'The user \'{username}\' already exists.')
 
     # Dump data to file as JSON
     user_data = {"username": username,
@@ -131,7 +192,7 @@ def get_user_credentials(username: str,
     """
     Returns the user's credentials fetched from the correct file.
     """
-    filepath = utils.build_absolute_path(f'user/{username}.txt')
+    filepath = utils.build_absolute_path(f'user/{username}.json')
 
     # Check if user exists and if the given password is correct
     try:
@@ -143,19 +204,7 @@ def get_user_credentials(username: str,
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='user.py')
-    parser.add_argument(
-        '--host',
-        default='localhost',
-        help='IP Address for users server.')
-    parser.add_argument(
-        '-p',
-        '--port',
-        type=int,
-        default='5005',
-        help='Port number for users server')
-    args = parser.parse_args()
-
     # Create user directory if it does not exist
     os.makedirs(utils.build_absolute_path('user'), exist_ok=True)
-    app.run(host=args.host, port=args.port)
+    app.run(host=os.getenv('USERS_SERVER_IP'),
+            port=int(os.getenv('USERS_SERVER_PORT')))

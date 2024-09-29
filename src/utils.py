@@ -16,15 +16,21 @@ def build_bad_request_response(reason: str = "") -> str:
     """
     Builds an HTML response for a bad request.
     """
-    response_html = "<!doctype html>\n" \
-                    "<html lang=en>\n" \
-                    "<title>400 Bad Request</title>\n" \
-                    "<h1>Bad Request</h1>\n" \
-                    "<p>The browser (or proxy) sent a request that this server could not understand.</p>"
-
+    response_html = "<!DOCTYPE html>\n" \
+                    "<html lang=\"en\">\n" \
+                    "<head>\n" \
+                    "    <meta charset=\"UTF-8\">\n" \
+                    "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" \
+                    "    <title>400 Bad Request</title>\n" \
+                    "</head>\n" \
+                    "<body>\n" \
+                    "    <h1>400 Bad Request</h1>\n" \
+                    "    <p>   There is something wrong with the request and could not be processed.   </p>\n"
     if reason:
-        response_html += f"\n<p>{reason}<\p>"
+        response_html += f"   <p>  {reason}   </p>\n"
 
+    response_html += "</body>\n" \
+                     "</html>\n"
     return response_html
 
 
@@ -62,6 +68,26 @@ def build_unauthorized_response() -> str:
                     "<body>\n" \
                     "    <h1>401 Unauthorized</h1>\n" \
                     "    <p> You are not authorized to access this page. </p>\n" \
+                    "</body>\n" \
+                    "</html>\n"
+
+    return response_html
+
+
+def build_internal_server_error() -> str:
+    """
+    Builds an HTML response for internal server error.
+    """
+    response_html = "<!DOCTYPE html>\n" \
+                    "<html lang=\"en\">\n" \
+                    "<head>\n" \
+                    "    <meta charset=\"UTF-8\">\n" \
+                    "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" \
+                    "    <title>500 Internal Server Error</title>\n" \
+                    "</head>\n" \
+                    "<body>\n" \
+                    "    <h1>500 Internal Server Error</h1>\n" \
+                    "    <p> Sorry, something went wrong in the server. </p>\n" \
                     "</body>\n" \
                     "</html>\n"
 
