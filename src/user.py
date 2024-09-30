@@ -154,6 +154,41 @@ async def delete_user(username):
         return quart.Response(utils.build_bad_request_response(), status=400)
 
 
+@app.route('/user/<uid>', methods=['GET'])
+async def validate_token(uid):
+    # Validates a specific token for a uid sent by the library server
+    auth_token = utils.get_access_token(
+        quart.request.headers.get('Authorization'))
+    if len(auth_token) == 0 or auth_token != os.getenv('SECRET'):
+        return quart.Response(
+            utils.build_unauthorized_response(), status=401)
+
+    try:
+        data = await quart.request.get_json()
+        token_for_validation = str(data['access_token'])
+    except (KeyError, TypeError, ValueError):
+        return quart.Response(utils.build_unauthorized_response(), status=401)
+
+    user_dir = utils.build_absolute_path("user")
+    # Iterate through all JSON files in the user directory
+    for filename in os.listdir(user_dir):
+        if filename.endswith(".json"):
+            file_path = os.path.join(user_dir, filename)
+            try:
+                with open(file_path, 'r') as f:
+                    user_data = json.load(f)
+
+                if user_data.get('uid') == uid:
+                    if user_data.get('access_token') == token_for_validation:
+                        return quart.Response(status=200)
+                    else:
+                        return quart.Response(utils.build_unauthorized_response(), status=401)
+            except (json.JSONDecodeError, OSError, KeyError, TypeError, ValueError):
+                continue
+
+    # If no match was found, return unauthorized response
+    return quart.Response(utils.build_unauthorized_response(), status=401)
+
 def generate_user_uuid_and_access_token() -> tuple:
     """
     Generates a user's UUID and access token.

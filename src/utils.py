@@ -92,3 +92,45 @@ def build_internal_server_error() -> str:
                     "</html>\n"
 
     return response_html
+
+
+def build_html_list_of_files(files) -> str:
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>File List</title>
+    </head>
+    <body>
+            <h1>Files in Library</h1>
+        <ul>
+    """
+
+    if not files:
+        html_content += "<p>There are no files in the library.</p>"
+    else:
+        html_content += "<ul>"
+        # Add each file to the HTML unordered list
+        for file in files:
+            html_content += f"<li>{file}</li>"
+        html_content += "</ul>"
+
+    html_content += """
+    </body>
+    </html>
+    """
+
+    return html_content
+
+
+def get_access_token(auth_header) -> str:
+    if auth_header is None:
+        return ""
+    auth_split = auth_header.split(" ")
+
+    if auth_split[0] == "Bearer" and len(auth_split) == 2:
+        return auth_split[1]
+    else:
+        return ""
