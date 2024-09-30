@@ -41,20 +41,8 @@ async def register_user():
         html_response = utils.build_bad_request_response(str(e))
         return quart.Response(html_response, status=400)
 
-    # Generate users library
-    user_creation_failure = False
-    try:
-        request = requests.put('http://' +
-                               os.getenv('LIBRARY_SERVER_IP') +
-                               ':' +
-                               os.getenv('LIBRARY_SERVER_PORT') +
-                               f'/file/{str(user_uuid)}', headers={"Authorization": 'Bearer ' +
-                                                                   str(os.getenv('SECRET'))})
-        if request.status_code != 200:
-            user_creation_failure = True
-    except requests.exceptions.ConnectionError:
-        user_creation_failure = True
-
+    # Generate user's library
+    user_creation_failure = generate_user_library(user_uuid)
     if user_creation_failure:
         if os.path.exists(
                 utils.build_absolute_path(
@@ -112,46 +100,46 @@ async def delete_user(username):
 
     auth_split = auth_token.split(" ")
 
-    if auth_split[0] == "Bearer" and len(auth_split) == 2:
-        try:
-            with open(utils.build_absolute_path('user/' + username + '.json'), 'r') as file:
-                data = json.load(file)
-            access_token = str(data['access_token'])
-
-            if access_token != auth_split[1]:
-                return quart.Response(
-                    utils.build_unauthorized_response(), status=401)
-            else:
-                # Try first to delete the library associated
-                # If there were no answer from the other server, the user
-                # would still be in the system
-                library_url = 'http://' + os.getenv('LIBRARY_SERVER_IP') + ':' + os.getenv(
-                    'LIBRARY_SERVER_PORT') + f'/file/' + str(data['uid'])
-                try:
-                    request = requests.delete(
-                        url=library_url,
-                        headers={"Authorization": 'Bearer ' + str(os.getenv('SECRET'))})
-                    if request.status_code == 200:
-                        # Finally remove the user from the system
-                        if os.path.exists(
-                                utils.build_absolute_path(
-                                    f'user/{username}.json')):
-                            os.remove(
-                                utils.build_absolute_path(
-                                    f'user/{username}.json'))
-                            return quart.Response(
-                                'User successfully deleted', status=200)
-                        else:
-                            return quart.Response(status=404)
-                    else:
-                        return quart.Response(status=500)
-                except requests.exceptions.ConnectionError:
-                    return quart.Response(
-                        utils.build_internal_server_error(), status=500)
-        except OSError:
-            return quart.Response(utils.build_not_found_response(), status=404)
-    else:
+    if auth_split[0] != "Bearer" or len(auth_split) != 2:
         return quart.Response(utils.build_bad_request_response(), status=400)
+
+    try:
+        with open(utils.build_absolute_path('user/' + username + '.json'), 'r') as file:
+            data = json.load(file)
+        access_token = str(data['access_token'])
+
+        if access_token != auth_split[1]:
+            return quart.Response(
+                utils.build_unauthorized_response(), status=401)
+        
+        # Try first to delete the library associated
+        # If there were no answer from the other server, the user
+        # would still be in the system
+        library_url = 'http://' + os.getenv('LIBRARY_SERVER_IP') + ':' + os.getenv(
+            'LIBRARY_SERVER_PORT') + f'/file/' + str(data['uid'])
+            
+        request = requests.delete(
+            url=library_url,
+            headers={"Authorization": 'Bearer ' + str(os.getenv('SECRET'))})
+        if request.status_code != 200:
+            return quart.Response(status=500)
+            
+        # Finally remove the user from the system
+        if os.path.exists(
+                utils.build_absolute_path(
+                    f'user/{username}.json')):
+            os.remove(
+                utils.build_absolute_path(
+                    f'user/{username}.json'))
+            return quart.Response(
+                'User successfully deleted', status=200)
+        else:
+            return quart.Response(status=404)
+    except requests.exceptions.ConnectionError:
+        return quart.Response(
+            utils.build_internal_server_error(), status=500)
+    except OSError:
+        return quart.Response(utils.build_not_found_response(), status=404)
 
 
 @app.route('/user/<uid>', methods=['GET'])
@@ -222,6 +210,25 @@ def generate_user_file(username: str,
         json.dump(user_data, f)
 
 
+def generate_user_library(user_uuid: uuid.UUID) -> bool:
+    """
+    Generates a user's library by requesting the library service.
+    """
+    user_creation_failure = False
+    try:
+        request = requests.put('http://' +
+                               os.getenv('LIBRARY_SERVER_IP') +
+                               ':' +
+                               os.getenv('LIBRARY_SERVER_PORT') +
+                               f'/file/{str(user_uuid)}', headers={"Authorization": 'Bearer ' +
+                                                                   str(os.getenv('SECRET'))})
+        user_creation_failure = request.status_code != 200
+    except requests.exceptions.ConnectionError:
+        user_creation_failure = True
+
+    return user_creation_failure
+
+
 def get_user_credentials(username: str,
                          password: str) -> tuple:
     """
@@ -234,8 +241,14 @@ def get_user_credentials(username: str,
         with open(filepath, 'r') as f:
             user_data = json.load(f)
             read_password = user_data['password']
-    except BaseException:
-        print('TODO')
+    except FileNotFoundError:
+        raise ValueError(f'User \'{username}\' is not registered.')
+    
+    if read_password != password:
+        raise ValueError(f'Incorrect username or password')
+    
+    return (uuid.UUID(user_data['uid']),
+            uuid.UUID(user_data['access_token']))
 
 
 if __name__ == "__main__":
