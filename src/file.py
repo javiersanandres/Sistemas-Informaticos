@@ -1,6 +1,5 @@
 import json
 import os
-import uuid
 
 import quart
 import requests
@@ -26,7 +25,7 @@ async def create_user_library(uid):
     else:
         try:
             os.mkdir(utils.build_absolute_path(f'file/{uid}'))
-            return quart.Response(status=200)
+            return quart.Response(status=201)
         except OSError:
             return quart.Response(utils.build_internal_server_error(), status=500)
 
@@ -73,11 +72,83 @@ async def list_documents(uid):
         return quart.Response(utils.build_unauthorized_response(), status=401)
 
 
+@app.route('/file/<uid>/<filename>', methods=['PUT', 'POST'])
+async def add_file(uid, filename):
+    """
+    Adds a file to the user's library whose uid corresponds to the one in the url and only allows
+    the owner to do so. As it is stated in the practice guide if the file already exists, then it
+    should be replaced with the new one.
+    """
+    auth_token = utils.get_access_token(quart.request.headers.get('Authorization'))
+    if len(auth_token) == 0:
+        return quart.Response(
+            utils.build_unauthorized_response(), status=401)
+
+    data = await quart.request.get_data()
+
+    # Validate token communicating with the user server
+    if validate_token(auth_token, uid):
+        file_path = utils.build_absolute_path(f'file/{uid}/{filename}')
+        try:
+            with open(file_path, 'wb') as file:
+                file.write(data)
+            return quart.Response(status=201)
+        except OSError:
+            return quart.Response(utils.build_internal_server_error(), status=500)
+    else:
+        return quart.Response(utils.build_unauthorized_response(), status=401)
+
+
+@app.route('/file/<uid>/<filename>', methods=['GET'])
+async def send_file(uid, filename):
+    """
+    This function sends a file from the user's library whose uid coincides with the <uid> parameter
+    and name coincides with the filename specified by the requester.
+    """
+    auth_token = utils.get_access_token(quart.request.headers.get('Authorization'))
+    if len(auth_token) == 0:
+        return quart.Response(
+            utils.build_unauthorized_response(), status=401)
+
+    # Validate token communicating with the user server
+    if validate_token(auth_token, ""):
+        file_path = utils.build_absolute_path(f'file/{uid}/{filename}')
+        if os.path.isfile(file_path):
+            return await quart.send_file(file_path, as_attachment=True)
+        else:
+            return quart.Response(utils.build_not_found_response(), status=404)
+    else:
+        return quart.Response(utils.build_unauthorized_response(), status=401)
+
+
+@app.route('/file/<uid>/<filename>', methods=['DELETE'])
+async def delete_file(uid, filename):
+    """
+    This function deletes a file from the user's library. Only the owner of the library
+    can remove files from it.
+    """
+    auth_token = utils.get_access_token(quart.request.headers.get('Authorization'))
+    if len(auth_token) == 0:
+        return quart.Response(
+            utils.build_unauthorized_response(), status=401)
+
+    # Validate token communicating with the user server
+    if validate_token(auth_token, uid):
+        file_path = utils.build_absolute_path(f'file/{uid}/{filename}')
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return quart.Response(status=200)
+        else:
+            return quart.Response(utils.build_not_found_response(), status=404)
+    else:
+        return quart.Response(utils.build_unauthorized_response(), status=401)
+
+
 def validate_token(auth_token, uid) -> bool:
     try:
         request = requests.get(
             url='http://' + os.getenv('USERS_SERVER_IP') + ':' + os.getenv(
-                'USERS_SERVER_PORT') + f'/user/{uid}' ,
+                'USERS_SERVER_PORT') + f'/user/{uid}',
             headers={"Authorization": 'Bearer ' + str(os.getenv('SECRET')),
                      "Content-Type": "application/json"},
             data=json.dumps({"access_token" : f'{auth_token}'})

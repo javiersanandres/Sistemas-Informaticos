@@ -144,7 +144,11 @@ async def delete_user(username):
 
 @app.route('/user/<uid>', methods=['GET'])
 async def validate_token(uid):
-    # Validates a specific token for a uid sent by the library server
+    """
+    If uid is not an empty string, it checks whether the access_token sent corresponds to the uid
+    specified. If the uid is the empty string, then it just checks whether the access_token belongs
+    to a user in the system.
+    """
     auth_token = utils.get_access_token(
         quart.request.headers.get('Authorization'))
     if len(auth_token) == 0 or auth_token != os.getenv('SECRET'):
@@ -166,16 +170,20 @@ async def validate_token(uid):
                 with open(file_path, 'r') as f:
                     user_data = json.load(f)
 
-                if user_data.get('uid') == uid:
-                    if user_data.get('access_token') == token_for_validation:
+                if user_data.get('access_token') == token_for_validation:
+                    if uid != "" and user_data.get('uid') == uid:
+                        return quart.Response(status=200)
+                    elif uid == "":
                         return quart.Response(status=200)
                     else:
                         return quart.Response(utils.build_unauthorized_response(), status=401)
+
             except (json.JSONDecodeError, OSError, KeyError, TypeError, ValueError):
                 continue
 
     # If no match was found, return unauthorized response
     return quart.Response(utils.build_unauthorized_response(), status=401)
+
 
 def generate_user_uuid_and_access_token() -> tuple:
     """
@@ -222,7 +230,7 @@ def generate_user_library(user_uuid: uuid.UUID) -> bool:
                                os.getenv('LIBRARY_SERVER_PORT') +
                                f'/file/{str(user_uuid)}', headers={"Authorization": 'Bearer ' +
                                                                    str(os.getenv('SECRET'))})
-        user_creation_failure = request.status_code != 200
+        user_creation_failure = request.status_code != 201
     except requests.exceptions.ConnectionError:
         user_creation_failure = True
 
