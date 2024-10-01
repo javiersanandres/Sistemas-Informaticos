@@ -173,7 +173,7 @@ async def validate_token(uid):
                 if user_data.get('access_token') == token_for_validation:
                     if uid != "" and user_data.get('uid') == uid:
                         return quart.Response(status=200)
-                    elif uid == "":
+                    elif uid == " ":
                         return quart.Response(status=200)
                     else:
                         return quart.Response(utils.build_unauthorized_response(), status=401)

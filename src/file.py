@@ -1,6 +1,6 @@
 import json
 import os
-
+import shutil
 import quart
 import requests
 from dotenv import load_dotenv
@@ -44,7 +44,7 @@ async def delete_user_library(uid):
     else:
         # Try to remove the user library from the system
         if os.path.exists(utils.build_absolute_path(f'file/{uid}')):
-            os.rmdir(utils.build_absolute_path(f'file/{uid}'))
+            shutil.rmtree(utils.build_absolute_path(f'file/{uid}'))
             return quart.Response(status=200)
         else:
             return quart.Response(utils.build_not_found_response(), status=404)
@@ -111,7 +111,7 @@ async def send_file(uid, filename):
             utils.build_unauthorized_response(), status=401)
 
     # Validate token communicating with the user server
-    if validate_token(auth_token, ""):
+    if validate_token(auth_token, " "):
         file_path = utils.build_absolute_path(f'file/{uid}/{filename}')
         if os.path.isfile(file_path):
             return await quart.send_file(file_path, as_attachment=True)

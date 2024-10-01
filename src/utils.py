@@ -105,7 +105,6 @@ def build_html_list_of_files(files) -> str:
     </head>
     <body>
             <h1>Files in Library</h1>
-        <ul>
     """
 
     if not files:
