@@ -75,7 +75,7 @@ async def login_user():
         return quart.Response(
             utils.build_bad_request_response(
                 f'Missing user name and password.'),
-            status=400)
+                status=400)
 
     # Fetch user's credentials from file
     try:
@@ -104,85 +104,28 @@ async def delete_user(username):
         return quart.Response(utils.build_bad_request_response(), status=400)
 
     try:
-        with open(utils.build_absolute_path('user/' + username + '.json'), 'r') as file:
+        with open(utils.build_absolute_path(
+                'user/' + username + '.json'), 'r') as file:
             data = json.load(file)
         access_token = str(data['access_token'])
 
         if access_token != auth_split[1]:
-            return quart.Response(
-                utils.build_unauthorized_response(), status=401)
+            return quart.Response(utils.build_unauthorized_response(),
+                                  status=401)
         
-        # Try first to delete the library associated
-        # If there were no answer from the other server, the user
-        # would still be in the system
-        library_url = 'http://' + os.getenv('LIBRARY_SERVER_IP') + ':' + os.getenv(
-            'LIBRARY_SERVER_PORT') + f'/file/' + str(data['uid'])
-            
-        request = requests.delete(
-            url=library_url,
-            headers={"Authorization": 'Bearer ' + str(os.getenv('SECRET'))})
-        if request.status_code != 200:
-            return quart.Response(status=500)
+        if delete_user_library(data['uid']) != 200:
+            return quart.Response(utils.build_internal_server_error(),
+                                  status=500)
             
         # Finally remove the user from the system
-        if os.path.exists(
-                utils.build_absolute_path(
-                    f'user/{username}.json')):
-            os.remove(
-                utils.build_absolute_path(
-                    f'user/{username}.json'))
-            return quart.Response(
-                'User successfully deleted', status=200)
-        else:
+        if not os.path.exists(utils.build_absolute_path(
+                f'user/{username}.json')):
             return quart.Response(status=404)
-    except requests.exceptions.ConnectionError:
-        return quart.Response(
-            utils.build_internal_server_error(), status=500)
+        
+        os.remove(utils.build_absolute_path(f'user/{username}.json'))
+        return quart.Response('User successfully deleted', status=200)
     except OSError:
         return quart.Response(utils.build_not_found_response(), status=404)
-
-
-@app.route('/user/<uid>', methods=['GET'])
-async def validate_token(uid):
-    """
-    If uid is not an empty string, it checks whether the access_token sent corresponds to the uid
-    specified. If the uid is the empty string, then it just checks whether the access_token belongs
-    to a user in the system.
-    """
-    auth_token = utils.get_access_token(
-        quart.request.headers.get('Authorization'))
-    if len(auth_token) == 0 or auth_token != os.getenv('SECRET'):
-        return quart.Response(
-            utils.build_unauthorized_response(), status=401)
-
-    try:
-        data = await quart.request.get_json()
-        token_for_validation = str(data['access_token'])
-    except (KeyError, TypeError, ValueError):
-        return quart.Response(utils.build_unauthorized_response(), status=401)
-
-    user_dir = utils.build_absolute_path("user")
-    # Iterate through all JSON files in the user directory
-    for filename in os.listdir(user_dir):
-        if filename.endswith(".json"):
-            file_path = os.path.join(user_dir, filename)
-            try:
-                with open(file_path, 'r') as f:
-                    user_data = json.load(f)
-
-                if user_data.get('access_token') == token_for_validation:
-                    if uid != "" and user_data.get('uid') == uid:
-                        return quart.Response(status=200)
-                    elif uid == " ":
-                        return quart.Response(status=200)
-                    else:
-                        return quart.Response(utils.build_unauthorized_response(), status=401)
-
-            except (json.JSONDecodeError, OSError, KeyError, TypeError, ValueError):
-                continue
-
-    # If no match was found, return unauthorized response
-    return quart.Response(utils.build_unauthorized_response(), status=401)
 
 
 def generate_user_uuid_and_access_token() -> tuple:
@@ -257,6 +200,26 @@ def get_user_credentials(username: str,
     
     return (uuid.UUID(user_data['uid']),
             uuid.UUID(user_data['access_token']))
+
+
+def delete_user_library(user_uuid: uuid.UUID):
+    """
+    Deletes a user's library by requesting the library service.
+    """
+    # Try first to delete the library associated
+    # If there were no answer from the other server, the user
+    # would still be in the system
+    library_url = 'http://' + os.getenv('LIBRARY_SERVER_IP') + ':' + os.getenv(
+        'LIBRARY_SERVER_PORT') + f'/file/' + str(user_uuid)
+        
+    try:
+        request = requests.delete(
+            url=library_url,
+            headers={"Authorization": 'Bearer ' + str(os.getenv('SECRET'))})
+    except requests.exceptions.ConnectionError:
+        return 500
+    
+    return request.status_code
 
 
 if __name__ == "__main__":
