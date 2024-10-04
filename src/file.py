@@ -1,9 +1,6 @@
-import json
 import os
 import shutil
 import quart
-import requests
-import uuid
 from dotenv import load_dotenv
 
 import utils
@@ -63,7 +60,7 @@ async def list_documents(uid):
             utils.build_unauthorized_response(), status=401)
 
     # Validate token communicating with the user server
-    if validate_token(auth_token, uid):
+    if utils.validate_token(auth_token, uid):
         try:
             files = os.listdir(utils.build_absolute_path(f'file/{uid}'))
             return quart.Response(response=utils.build_html_list_of_files(files))
@@ -88,7 +85,7 @@ async def add_file(uid, filename):
     data = await quart.request.get_data()
 
     # Validate token communicating with the user server
-    if validate_token(auth_token, uid):
+    if utils.validate_token(auth_token, uid):
         file_path = utils.build_absolute_path(f'file/{uid}/{filename}')
         try:
             with open(file_path, 'wb') as file:
@@ -112,7 +109,7 @@ async def send_file(uid, filename):
             utils.build_unauthorized_response(), status=401)
 
     # Validate token communicating with the user server
-    if validate_token(auth_token, None):
+    if utils.validate_token(auth_token, None):
         file_path = utils.build_absolute_path(f'file/{uid}/{filename}')
         if os.path.isfile(file_path):
             return await quart.send_file(file_path, as_attachment=True)
@@ -134,7 +131,7 @@ async def delete_file(uid, filename):
             utils.build_unauthorized_response(), status=401)
 
     # Validate token communicating with the user server
-    if validate_token(auth_token, uid):
+    if utils.validate_token(auth_token, uid):
         file_path = utils.build_absolute_path(f'file/{uid}/{filename}')
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -143,17 +140,6 @@ async def delete_file(uid, filename):
             return quart.Response(utils.build_not_found_response(), status=404)
     else:
         return quart.Response(utils.build_unauthorized_response(), status=401)
-
-
-def validate_token(auth_header, uid) -> bool:
-    auth_header = auth_header.split('.')
-    if len(auth_header) != 2:
-        return False
-
-    if uid is None:
-        return uuid.UUID(auth_header[1]) == uuid.uuid5(uuid.UUID(os.getenv('SECRET')), auth_header[0])
-    else:
-        return uuid.UUID(auth_header[1]) == uuid.uuid5(uuid.UUID(os.getenv('SECRET')), uid)
 
 
 if __name__ == "__main__":

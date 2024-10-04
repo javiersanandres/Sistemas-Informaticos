@@ -93,22 +93,17 @@ async def delete_user(username):
     Deletes an already registered user. This function also deletes the library
     associated to that user by using SAGA pattern.
     """
-    auth_token = quart.request.headers.get('Authorization')
-    if auth_token is None:
+    auth_token = utils.get_access_token(quart.request.headers.get('Authorization'))
+    if len(auth_token) == 0:
         return quart.Response(
             utils.build_unauthorized_response(), status=401)
-
-    auth_split = auth_token.split(" ")
-
-    if auth_split[0] != "Bearer" or len(auth_split) != 2:
-        return quart.Response(utils.build_bad_request_response(), status=400)
 
     try:
         with open(utils.build_absolute_path('user/' + username + '.json'), 'r') as file:
             data = json.load(file)
-        access_token = str(data['access_token'])
+        uid = str(data['uid'])
 
-        if access_token != auth_split[1]:
+        if not utils.validate_token(auth_token, uid):
             return quart.Response(
                 utils.build_unauthorized_response(), status=401)
         

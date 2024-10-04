@@ -1,4 +1,5 @@
 import os
+import uuid
 
 
 def build_absolute_path(relative_filepath: str) -> str:
@@ -133,3 +134,14 @@ def get_access_token(auth_header) -> str:
         return auth_split[1]
     else:
         return ""
+
+
+def validate_token(auth_header, uid) -> bool:
+    auth_header = auth_header.split('.')
+    if len(auth_header) != 2:
+        return False
+
+    if uid is None:
+        return uuid.UUID(auth_header[1]) == uuid.uuid5(uuid.UUID(os.getenv('SECRET')), auth_header[0])
+    else:
+        return uuid.UUID(auth_header[1]) == uuid.uuid5(uuid.UUID(os.getenv('SECRET')), uid)
