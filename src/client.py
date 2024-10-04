@@ -68,13 +68,13 @@ if __name__ == "__main__":
     with open(utils.build_absolute_path(f'user/{username1}.json'), 'r') as file:
         data = json.load(file)
 
-    access_token1 = str(data['access_token'])
+    access_token1 = str(data['uid'])+'.'+str(data['access_token'])
     uid1 = str(data['uid'])
 
     with open(utils.build_absolute_path(f'user/{username2}.json'), 'r') as file:
         data = json.load(file)
 
-    access_token2 = str(data['access_token'])
+    access_token2 = str(data['uid'])+'.'+str(data['access_token'])
     uid2 = str(data['uid'])
 
     create_user_library(access_token1, uid1)
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     with open(utils.build_absolute_path(f'user/{username1}.json'), 'r') as file:
         data = json.load(file)
 
-    access_token1 = str(data['access_token'])
+    access_token1 = str(data['uid'])+'.'+str(data['access_token'])
     uid1 = str(data['uid'])
 
     add_file(access_token1, uid1, "example1.txt", "This is an example1.")
