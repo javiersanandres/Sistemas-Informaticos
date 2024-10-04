@@ -142,49 +142,6 @@ async def delete_user(username):
         return quart.Response(utils.build_not_found_response(), status=404)
 
 
-@app.route('/user/<uid>', methods=['GET'])
-async def validate_token(uid):
-    """
-    If uid is not an empty string, it checks whether the access_token sent corresponds to the uid
-    specified. If the uid is the empty string, then it just checks whether the access_token belongs
-    to a user in the system.
-    """
-    auth_token = utils.get_access_token(
-        quart.request.headers.get('Authorization'))
-    if len(auth_token) == 0 or auth_token != os.getenv('SECRET'):
-        return quart.Response(
-            utils.build_unauthorized_response(), status=401)
-
-    try:
-        data = await quart.request.get_json()
-        token_for_validation = str(data['access_token'])
-    except (KeyError, TypeError, ValueError):
-        return quart.Response(utils.build_unauthorized_response(), status=401)
-
-    user_dir = utils.build_absolute_path("user")
-    # Iterate through all JSON files in the user directory
-    for filename in os.listdir(user_dir):
-        if filename.endswith(".json"):
-            file_path = os.path.join(user_dir, filename)
-            try:
-                with open(file_path, 'r') as f:
-                    user_data = json.load(f)
-
-                if user_data.get('access_token') == token_for_validation:
-                    if uid != "" and user_data.get('uid') == uid:
-                        return quart.Response(status=200)
-                    elif uid == " ":
-                        return quart.Response(status=200)
-                    else:
-                        return quart.Response(utils.build_unauthorized_response(), status=401)
-
-            except (json.JSONDecodeError, OSError, KeyError, TypeError, ValueError):
-                continue
-
-    # If no match was found, return unauthorized response
-    return quart.Response(utils.build_unauthorized_response(), status=401)
-
-
 def generate_user_uuid_and_access_token() -> tuple:
     """
     Generates a user's UUID and access token.

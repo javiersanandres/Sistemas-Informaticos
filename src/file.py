@@ -3,6 +3,7 @@ import os
 import shutil
 import quart
 import requests
+import uuid
 from dotenv import load_dotenv
 
 import utils
@@ -111,7 +112,7 @@ async def send_file(uid, filename):
             utils.build_unauthorized_response(), status=401)
 
     # Validate token communicating with the user server
-    if validate_token(auth_token, " "):
+    if validate_token(auth_token, None):
         file_path = utils.build_absolute_path(f'file/{uid}/{filename}')
         if os.path.isfile(file_path):
             return await quart.send_file(file_path, as_attachment=True)
@@ -144,22 +145,15 @@ async def delete_file(uid, filename):
         return quart.Response(utils.build_unauthorized_response(), status=401)
 
 
-def validate_token(auth_token, uid) -> bool:
-    try:
-        request = requests.get(
-            url='http://' + os.getenv('USERS_SERVER_IP') + ':' + os.getenv(
-                'USERS_SERVER_PORT') + f'/user/{uid}',
-            headers={"Authorization": 'Bearer ' + str(os.getenv('SECRET')),
-                     "Content-Type": "application/json"},
-            data=json.dumps({"access_token" : f'{auth_token}'})
-        )
-
-        if request.status_code == 200:
-            return True
-        else:
-            return False
-    except requests.exceptions.ConnectionError:
+def validate_token(auth_header, uid) -> bool:
+    auth_header = auth_header.split('.')
+    if len(auth_header) != 2:
         return False
+
+    if uid is None:
+        return uuid.UUID(auth_header[1]) == uuid.uuid5(uuid.UUID(os.getenv('SECRET')), auth_header[0])
+    else:
+        return uuid.UUID(auth_header[1]) == uuid.uuid5(uuid.UUID(os.getenv('SECRET')), uid)
 
 
 if __name__ == "__main__":
