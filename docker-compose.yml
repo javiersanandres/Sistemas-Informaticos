@@ -1,0 +1,26 @@
+services:
+  user_app:
+    build:
+      context: ./
+      dockerfile: users_server/Dockerfile
+    ports:
+      - "5005:5005"
+    volumes:
+      - .:/users_service/user
+    env_file:
+      - ./.env  # Specify the location of the .env file
+    command: python user.py
+    depends_on:
+      - file_app
+
+  file_app:
+    build:
+      context: ./
+      dockerfile: library_server/Dockerfile
+    ports:
+      - "5010:5010"
+    volumes:
+      - .:/library_server/file
+    env_file:
+      - ./.env  # Specify the location of the .env file
+    command: python file.py

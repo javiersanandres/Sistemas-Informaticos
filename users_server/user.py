@@ -93,7 +93,8 @@ async def delete_user(username):
     Deletes an already registered user. This function also deletes the library
     associated to that user by using SAGA pattern.
     """
-    auth_token = utils.get_access_token(quart.request.headers.get('Authorization'))
+    auth_token = utils.get_access_token(
+        quart.request.headers.get('Authorization'))
     if len(auth_token) == 0:
         return quart.Response(
             utils.build_unauthorized_response(), status=401)
@@ -107,11 +108,11 @@ async def delete_user(username):
         if not utils.validate_token(auth_token, uid):
             return quart.Response(
                 utils.build_unauthorized_response(), status=401)
-        
+
         if delete_user_library(data['uid']) != 200:
             return quart.Response(utils.build_internal_server_error(),
                                   status=500)
-            
+
         # Finally remove the user from the system
         if not os.path.exists(utils.build_absolute_path(
                 f'user/{username}.json')):
@@ -160,14 +161,12 @@ def generate_user_library(user_uuid: uuid.UUID) -> bool:
     """
     Generates a user's library by requesting the library service.
     """
-    user_creation_failure = False
     try:
-        request = requests.put('http://' +
-                               os.getenv('LIBRARY_SERVER_IP') +
-                               ':' +
+        request = requests.put('http://file_app:' +
                                os.getenv('LIBRARY_SERVER_PORT') +
-                               f'/file/{str(user_uuid)}', headers={"Authorization": 'Bearer ' +
-                                                                   str(os.getenv('SECRET'))})
+                               f'/file/{str(user_uuid)}',
+                               headers={"Authorization":
+                                        'Bearer ' + str(os.getenv('SECRET'))})
         user_creation_failure = request.status_code != 201
     except requests.exceptions.ConnectionError:
         user_creation_failure = True
@@ -189,10 +188,10 @@ def get_user_credentials(username: str,
             read_password = user_data['password']
     except FileNotFoundError:
         raise ValueError(f'User \'{username}\' is not registered.')
-    
+
     if read_password != password:
         raise ValueError(f'Incorrect username or password')
-    
+
     return (uuid.UUID(user_data['uid']),
             uuid.UUID(user_data['access_token']))
 
@@ -204,7 +203,7 @@ def delete_user_library(user_uuid: uuid.UUID):
     # Try first to delete the library associated
     # If there were no answer from the other server, the user
     # would still be in the system
-    library_url = 'http://' + os.getenv('LIBRARY_SERVER_IP') + ':' + os.getenv(
+    library_url = 'http://file_app:' + os.getenv(
         'LIBRARY_SERVER_PORT') + f'/file/' + str(user_uuid)
 
     try:
@@ -220,5 +219,5 @@ def delete_user_library(user_uuid: uuid.UUID):
 if __name__ == "__main__":
     # Create user directory if it does not exist
     os.makedirs(utils.build_absolute_path('user'), exist_ok=True)
-    app.run(host=os.getenv('USERS_SERVER_IP'),
+    app.run(host="0.0.0.0",
             port=int(os.getenv('USERS_SERVER_PORT')))
