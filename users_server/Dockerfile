@@ -4,8 +4,6 @@ FROM python:latest
 # We set a working directory for our container
 WORKDIR /user_service
 
-VOLUME ["/user_service/user"]
-
 COPY users_server/user.py ./
 COPY requirements.txt ./
 COPY utils.py ./

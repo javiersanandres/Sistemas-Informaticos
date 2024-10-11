@@ -1,6 +1,5 @@
 import os
 import shutil
-
 import quart
 from dotenv import load_dotenv
 
@@ -94,10 +93,18 @@ async def add_file(uid, filename):
     # Validate token communicating with the user server
     if utils.validate_token(auth_token, uid):
         file_path = utils.build_absolute_path(f'file/{uid}/{filename}')
+        update = os.path.isfile(file_path)
         try:
             with open(file_path, 'wb') as file:
                 file.write(data)
-            return quart.Response(status=201)
+
+            if update:
+                return quart.Response(f"File {filename} updated successfully "
+                                      "in user's library\n", status=201)
+            else:
+                return quart.Response(f"File {filename} added successfully in "
+                                      "user's library\n", status=201)
+
         except OSError:
             return quart.Response(
                 utils.build_internal_server_error(), status=500)
@@ -146,7 +153,8 @@ async def delete_file(uid, filename):
         file_path = utils.build_absolute_path(f'file/{uid}/{filename}')
         if os.path.exists(file_path):
             os.remove(file_path)
-            return quart.Response(status=200)
+            return quart.Response(f"File {filename} successfully "
+                                  f"deleted from user's library\n", status=200)
         else:
             return quart.Response(utils.build_not_found_response(), status=404)
     else:
@@ -156,5 +164,5 @@ async def delete_file(uid, filename):
 if __name__ == "__main__":
     # Create file directory if it does not exist
     os.makedirs(utils.build_absolute_path('file'), exist_ok=True)
-    app.run(host="0.0.0.0",
+    app.run(host="file_app",
             port=int(os.getenv('LIBRARY_SERVER_PORT')))

@@ -2,11 +2,11 @@ services:
   user_app:
     build:
       context: ./
-      dockerfile: users_server/Dockerfile
+      dockerfile: ./users_server/Dockerfile
     ports:
       - "5005:5005"
     volumes:
-      - .:/users_service/user
+      - users_data:/user_service/user
     env_file:
       - ./.env  # Specify the location of the .env file
     command: python user.py
@@ -20,7 +20,14 @@ services:
     ports:
       - "5010:5010"
     volumes:
-      - .:/library_server/file
+      - library_data:/library_service/file
     env_file:
       - ./.env  # Specify the location of the .env file
     command: python file.py
+
+volumes:
+  users_data:
+    name: users_data
+  library_data:
+    name: library_data
+

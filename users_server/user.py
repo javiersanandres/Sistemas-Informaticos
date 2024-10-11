@@ -1,7 +1,6 @@
 import json
 import os
 import uuid
-
 import quart
 import requests
 from dotenv import load_dotenv
@@ -27,7 +26,7 @@ async def register_user():
         html_response = utils.build_bad_request_response(
             f'Missing field: {str(e)}')
         return quart.Response(html_response, status=400)
-    except TypeError as e:
+    except TypeError:
         return quart.Response(utils.build_bad_request_response(), status=400)
 
     # Generate user UUID and access token
@@ -35,8 +34,7 @@ async def register_user():
 
     # Generate file with user's info
     try:
-        generate_user_file(username, password,
-                           user_uuid, access_token)
+        generate_user_file(username, password, user_uuid)
     except ValueError as e:
         html_response = utils.build_bad_request_response(str(e))
         return quart.Response(html_response, status=400)
@@ -71,7 +69,7 @@ async def login_user():
         html_response = utils.build_bad_request_response(
             f'Missing field: {str(e)}')
         return quart.Response(html_response, status=400)
-    except TypeError as e:
+    except TypeError:
         return quart.Response(
             utils.build_bad_request_response(
                 f'Missing user name and password.'),
@@ -119,7 +117,8 @@ async def delete_user(username):
             return quart.Response(status=404)
 
         os.remove(utils.build_absolute_path(f'user/{username}.json'))
-        return quart.Response('User successfully deleted', status=200)
+        return quart.Response(f'User {username}successfully deleted\n',
+                              status=200)
     except OSError:
         return quart.Response(utils.build_not_found_response(), status=404)
 
@@ -129,16 +128,23 @@ def generate_user_uuid_and_access_token() -> tuple:
     Generates a user's UUID and access token.
     """
     user_uuid = uuid.uuid4()
-    secret_uuid = uuid.UUID(os.getenv('SECRET'))
-    access_token = uuid.uuid5(secret_uuid, str(user_uuid))
+    access_token = get_user_access_token(user_uuid)
 
     return user_uuid, access_token
 
 
+def get_user_access_token(user_uid) -> uuid.UUID:
+    """
+    Returns the access token associated to a uuid.
+    """
+    secret_uuid = uuid.UUID(os.getenv('SECRET'))
+
+    return uuid.uuid5(secret_uuid, str(user_uid))
+
+
 def generate_user_file(username: str,
                        password: str,
-                       user_uuid: uuid.UUID,
-                       access_token: uuid.UUID) -> None:
+                       user_uuid: uuid.UUID) -> None:
     """
     Generates a file with the user's info.
     """
@@ -149,10 +155,8 @@ def generate_user_file(username: str,
         raise ValueError(f'The user \'{username}\' already exists.')
 
     # Dump data to file as JSON
-    user_data = {"username": username,
-                 "password": password,
-                 "uid": str(user_uuid),
-                 "access_token": str(access_token)}
+    user_data = {"password": hash(password),
+                 "uid": str(user_uuid)}
     with open(filepath, 'w') as f:
         json.dump(user_data, f)
 
@@ -189,11 +193,11 @@ def get_user_credentials(username: str,
     except FileNotFoundError:
         raise ValueError(f'User \'{username}\' is not registered.')
 
-    if read_password != password:
+    if read_password != hash(password):
         raise ValueError(f'Incorrect username or password')
 
-    return (uuid.UUID(user_data['uid']),
-            uuid.UUID(user_data['access_token']))
+    user_uid = uuid.UUID(user_data['uid'])
+    return user_uid, get_user_access_token(user_uid)
 
 
 def delete_user_library(user_uuid: uuid.UUID):
@@ -219,5 +223,5 @@ def delete_user_library(user_uuid: uuid.UUID):
 if __name__ == "__main__":
     # Create user directory if it does not exist
     os.makedirs(utils.build_absolute_path('user'), exist_ok=True)
-    app.run(host="0.0.0.0",
+    app.run(host="user_app",
             port=int(os.getenv('USERS_SERVER_PORT')))

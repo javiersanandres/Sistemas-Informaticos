@@ -1,24 +1,26 @@
 import json
-
 import requests
 
 user_url = 'http://localhost:5005/user'
 library_url = 'http://localhost:5010/file'
 
 
-def create_user(username):
-    print("CREATING USER:\n")
+def create_user(username, description=""):
+    print("CREATING USER: " + description)
     r = requests.put(url=user_url,
                      headers={"Content-Type": "application/json"},
                      data=json.dumps({"name": f'{username}',
                                       "password": "pepe"}))
     print(r.text)
 
-    return json.loads(r.text)
+    if description == "(New user)":
+        return json.loads(r.text)
+    else:
+        return None
 
 
-def delete_user(access_token, username):
-    print("DELETE USER:\n")
+def delete_user(access_token, username, description=""):
+    print("DELETE USER: " + description)
     r = requests.delete(
         url=user_url + f'/{username}',
         headers={
@@ -26,8 +28,18 @@ def delete_user(access_token, username):
     print(r.text)
 
 
+def login_user(username, password, description=""):
+    print("LOGIN USER: " + description)
+    r = requests.get(
+        url=user_url,
+        headers={"Content-Type": "application/json"},
+        data=json.dumps({"name": f'{username}',
+                         "password": f'{password}'}))
+    print(r.text)
+
+
 def create_user_library(access_token, uid):
-    print("TRY TO CREATE LIBRARY DIRECTLY:\n")
+    print("TRY TO CREATE LIBRARY DIRECTLY:")
     r = requests.put(
         url=library_url + f'/{uid}',
         headers={
@@ -36,7 +48,7 @@ def create_user_library(access_token, uid):
 
 
 def delete_user_library(access_token, uid):
-    print("TRY TO DELETE LIBRARY DIRECTLY:\n")
+    print("TRY TO DELETE LIBRARY DIRECTLY:")
     r = requests.delete(
         url=library_url + f'/{uid}',
         headers={
@@ -44,8 +56,8 @@ def delete_user_library(access_token, uid):
     print(r.text)
 
 
-def list_user_library(access_token, uid):
-    print("LIST LIBRARY:\n")
+def list_user_library(access_token, uid, description=""):
+    print("LIST LIBRARY: " + description)
     r = requests.get(
         url=library_url + f'/{uid}',
         headers={
@@ -53,8 +65,8 @@ def list_user_library(access_token, uid):
     print(r.text)
 
 
-def add_file(access_token, uid, filename, content):
-    print(f"ADDING FILE {filename}:\n")
+def add_file(access_token, uid, filename, content, description=""):
+    print(f"ADDING FILE {filename}: " + description)
     r = requests.put(
         url=library_url + f'/{uid}/{filename}',
         headers={
@@ -63,8 +75,8 @@ def add_file(access_token, uid, filename, content):
     print(r.text)
 
 
-def remove_file(access_token, uid, filename):
-    print(f"DELETING FILE {filename}:\n")
+def remove_file(access_token, uid, filename, description=""):
+    print(f"DELETING FILE {filename}: " + description)
     r = requests.delete(
         url=library_url + f'/{uid}/{filename}',
         headers={
@@ -72,8 +84,8 @@ def remove_file(access_token, uid, filename):
     print(r.text)
 
 
-def download_file(access_token, uid, filename):
-    print(f"DOWNLOADING FILE {filename}:\n")
+def download_file(access_token, uid, filename, description=""):
+    print(f"DOWNLOADING FILE {filename}: " + description)
     r = requests.get(
         url=library_url + f'/{uid}/{filename}',
         headers={
@@ -85,34 +97,70 @@ if __name__ == "__main__":
     username1 = "hola1"
     username2 = "hola2"
 
-    data = create_user(username1)
-    access_token1 = str(data['uid']) + '.' + str(data['access_token'])
-    uid1 = str(data['uid'])
+    try:
+        data = create_user(username1, "(New user)")
+        access_token1 = str(data['uid']) + '.' + str(data['access_token'])
+        uid1 = str(data['uid'])
 
-    data = create_user(username2)
-    access_token2 = str(data['uid']) + '.' + str(data['access_token'])
-    uid2 = str(data['uid'])
+        data = create_user(username2, "(New user)")
+        access_token2 = str(data['uid']) + '.' + str(data['access_token'])
+        uid2 = str(data['uid'])
 
-    create_user_library(access_token1, uid1)
-    delete_user_library(access_token1, uid1)
-    list_user_library(access_token1, uid1)
-    list_user_library(access_token2, uid1)
+        create_user(username1, "(Already existing user)")
 
-    delete_user(access_token1, username1)
+        login_user(username1, "pepe", "(Valid credentials)")
+        login_user(username1, "jose", "(Invalid credentials)")
+        login_user("hola", "Pepe", "(Non-existing user)")
 
-    data = create_user(username1)
-    access_token1 = str(data['uid']) + '.' + str(data['access_token'])
-    uid1 = str(data['uid'])
+        create_user_library(access_token1, uid1)
+        delete_user_library(access_token1, uid1)
 
-    add_file(access_token1, uid1, "example1.txt", "This is an example1.")
-    add_file(access_token1, uid1, "example2.txt",
-             "This is an example2.(first version")
-    add_file(access_token1, uid1, "example2.txt",
-             "This is an example2.(second version)")
-    add_file(access_token2, uid1, "dummy", "dummy")
-    list_user_library(access_token1, uid1)
-    list_user_library(access_token2, uid1)
-    remove_file(access_token2, uid1, "example1.txt")
-    remove_file(access_token1, uid1, "example1.txt")
-    download_file(access_token2, uid1, "example2.txt")
-    download_file(access_token1, uid1, "example2.txt")
+        list_user_library(access_token1, uid1, "(Valid access token)")
+        list_user_library(access_token2, uid1, "(Invalid access token)")
+
+        delete_user(access_token1, username1, "(Existing user)")
+        delete_user(access_token1, username1, "(Non-existing user)")
+
+        data = create_user(username1, "(New user)")
+        access_token1 = str(data['uid']) + '.' + str(data['access_token'])
+        uid1 = str(data['uid'])
+
+        add_file(access_token1, uid1, "example1.txt", "This is an example1.\n",
+                 description="(Valid access token)")
+        add_file(access_token1, uid1, "example2.txt",
+                 "This is an example2.(first version)\n",
+                 description="(Valid access token)")
+        add_file(
+            access_token1,
+            uid1,
+            "example2.txt",
+            "This is an example2.(second version)\n",
+            description="(Valid access token but already existing file)")
+        add_file(access_token2, uid1, "dummy", "dummy",
+                 description="(Invalid access token)")
+
+        list_user_library(access_token1, uid1, "(Valid access token)")
+        list_user_library(access_token2, uid1, "(Invalid access token)")
+
+        remove_file(access_token2, uid1, "example1.txt",
+                    description="(Invalid access token)")
+        remove_file(access_token1, uid1, "example1.txt",
+                    description="(Invalid access token)")
+
+        download_file(
+            access_token2,
+            uid1,
+            "example2.txt",
+            description="(Existing file but not from user's own library)")
+        download_file(
+            access_token1,
+            uid1,
+            "example2.txt",
+            description="(Existing file and from user's own library)")
+        download_file(access_token1, uid1, "example1.txt",
+                      description="(Non-existing file)")
+
+    except Exception:
+        print(
+            "Something went wrong with the test. Make sure both servers are "
+            "running, do not forget to empty Docker Volumes and try again.")
