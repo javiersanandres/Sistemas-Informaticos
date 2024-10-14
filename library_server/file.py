@@ -75,7 +75,7 @@ async def list_documents(uid):
         return quart.Response(utils.build_unauthorized_response(), status=401)
 
 
-@app.route('/file/<uid>/<filename>', methods=['PUT', 'POST'])
+@app.route('/file/<uid>/<filename>', methods=['PUT'])
 async def add_file(uid, filename):
     """
     Adds a file to the user's library whose uid corresponds to the one in the
