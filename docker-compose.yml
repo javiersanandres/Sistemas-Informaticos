@@ -1,0 +1,15 @@
+version: '3.4'
+services:
+  db:
+    image: postgres:14.8
+    restart: on-failure
+    environment:
+      - POSTGRES_PASSWORD=1234
+      - POSTGRES_DB=si1
+      - POSTGRES_USER=alumnodb
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ./dump_p2_v1.sql.gz:/docker-entrypoint-initdb.d/1_data.sql.gz
+volumes:
+  db-data:
