@@ -41,18 +41,11 @@ ADD CONSTRAINT actormovies_movie_fkey FOREIGN KEY (movieid) REFERENCES imdb_movi
 ALTER TABLE orders
 ADD CONSTRAINT orders_customer_fkey FOREIGN KEY (customerid) REFERENCES customers(customerid) ON DELETE SET NULL ON UPDATE CASCADE;
 
--- Remove duplicates form orderdetail table
-DELETE FROM public.orderdetail
-WHERE ctid NOT IN (
-    SELECT MIN(ctid)
-    FROM public.orderdetail
-    GROUP BY orderid, prod_id
-);
-
-
 -- Add foreign keys to orderdetail table and new primary key
 ALTER TABLE orderdetail
-ADD PRIMARY KEY (orderid, prod_id),
+-- Although we'd liked to add this in here, the multivalued and repeated rows
+-- problem must be handled in another script called actualizaTablas.sql
+-- ADD PRIMARY KEY (orderid, prod_id) -- will be fixed in another script
 ADD CONSTRAINT orderdetail_order_fkey FOREIGN KEY (orderid) REFERENCES orders(orderid) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT orderdetail_product_fkey FOREIGN KEY (prod_id) REFERENCES products(prod_id) ON DELETE CASCADE ON UPDATE CASCADE;
 

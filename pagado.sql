@@ -14,13 +14,7 @@ BEGIN
 		-- Check if the product is available in stock
 		IF order_prod.stock - order_prod.quantity < 0 THEN
         	RAISE NOTICE 'Cannot pay order as there are products not available in stock';
-			ROLLBACK; -- Undo all previous changes as the order is not being paid
-			
-			UPDATE orders 
-			SET status = NULL -- Mark the order as unpaid
-			WHERE orderid = NEW.orderid;
-			
-			RETURN NEW;
+			RETURN NULL; -- Undo all previous changes as the order is not being paid
 		ELSE
 			UPDATE inventory
 			SET stock = order_prod.stock - order_prod.quantity,
@@ -30,7 +24,7 @@ BEGIN
     END LOOP;
 
 	-- Try to pay for the order
-	CALL calculateOrderPrice(NEW.orderid); -- Calculate the price just in case
+	CALL updateOrderPrice(NEW.orderid); -- Calculate the price just in case
 	
 	SELECT customerid, balance, totalamount INTO customer_order
 	FROM orders NATURAL JOIN customers 
@@ -38,11 +32,7 @@ BEGIN
 	
 	IF customer_order.balance - customer_order.totalamount < 0 THEN
 		RAISE NOTICE 'Cannot pay order as there is not enough balance in account';
-		ROLLBACK; -- Undo all previous changes as the order is not being paid
-		
-		UPDATE orders 
-		SET status = NULL -- Mark the order as unpaid
-		WHERE orderid = NEW.orderid; 
+		RETURN NULL; -- Undo all previous changes as the order is not being paid
 	ELSE
 		UPDATE customers 
 		SET balance = customer_order.balance - customer_order.totalamount
@@ -56,7 +46,7 @@ LANGUAGE plpgsql;
 
 -- Create the trigger for changes in orders table
 CREATE OR REPLACE TRIGGER pagado
-AFTER UPDATE ON orders
+BEFORE UPDATE ON orders
 FOR EACH ROW
-WHEN (NEW.status = 'Paid')
-	EXECUTE FUNCTION pagado_tr_function();
+WHEN (NEW.status = 'Paid' AND NEW.status IS DISTINCT FROM OLD.status)
+EXECUTE FUNCTION pagado_tr_function();

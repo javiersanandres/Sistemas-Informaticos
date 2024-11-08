@@ -3,9 +3,9 @@ CREATE OR REPLACE FUNCTION actualizaCarrito_tr_function()
 RETURNS TRIGGER AS $$
 BEGIN
 	IF new.orderid IS NOT NULL THEN -- NOT NULL when UPDATE OR INSERT
-		CALL calculateOrderPrice(new.orderid);
+		CALL updateOrderPrice(new.orderid);
 	ELSIF old.orderid IS NOT NULL THEN -- NOT NULL when DELETE
-		CALL calculateOrderPrice(old.orderid);
+		CALL updateOrderPrice(old.orderid);
 	END IF;
     RETURN NEW;
 END;
