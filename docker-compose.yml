@@ -1,5 +1,16 @@
-version: '3.4'
 services:
+  api:
+    build:
+      context: ./api_server
+      dockerfile: ./Dockerfile
+    ports:
+      - "127.0.0.1:5015:5000"
+    env_file:
+      - ./api_server/.env
+    command: python api.py
+    depends_on:
+      - db1
+
   db1:
     image: postgres:14.8
     restart: on-failure

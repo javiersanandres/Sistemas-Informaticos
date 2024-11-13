@@ -1,169 +1,460 @@
 import os
-import shutil
-import quart
+from quart import Quart, request, jsonify
 from dotenv import load_dotenv
-import sqlalchemy
+import sqlalchemy as sql
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from datetime import datetime
 
-import utils
-
-app = quart.Quart(__name__)
-
+app = Quart(__name__)
 load_dotenv()
 
-
-@app.route('/file/<uid>', methods=['PUT'])
-async def create_user_library(uid):
-    """
-        Creates a library associated to a specific user. This action can only
-        be commanded by the users server. Any other attempt will be rejected.
-    """
-    auth_token = utils.get_access_token(
-        quart.request.headers.get('Authorization'))
-    if len(auth_token) == 0 or auth_token != os.getenv('SECRET'):
-        return quart.Response(
-            utils.build_unauthorized_response(), status=401)
-    else:
-        try:
-            os.mkdir(utils.build_absolute_path(f'file/{uid}'))
-            return quart.Response(status=201)
-        except OSError:
-            return quart.Response(
-                utils.build_internal_server_error(), status=500)
+engine = create_async_engine(os.getenv('DATABASE_URL'), echo=True)
+AsyncSessionLocal = sql.orm.sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 
-@app.route('/file/<uid>', methods=['DELETE'])
-async def delete_user_library(uid):
-    """
-    Deletes the library associated to a specific user. That only happens
-    when the user is also pretended to be removed from the system and this
-    command can only come from users server.
-    """
-    auth_token = utils.get_access_token(
-        quart.request.headers.get('Authorization'))
-    if len(auth_token) == 0 or auth_token != os.getenv('SECRET'):
-        return quart.Response(
-            utils.build_unauthorized_response(), status=401)
-    else:
-        # Try to remove the user library from the system
-        if os.path.exists(utils.build_absolute_path(f'file/{uid}')):
-            shutil.rmtree(utils.build_absolute_path(f'file/{uid}'))
-            return quart.Response(status=200)
+@app.route('/register', methods=['PUT'])
+async def register():
+    data = await request.get_json()
+    try:
+        username = data.get('username')
+        password = data.get('password')
+        address = data.get('address')
+        creditcard = data.get('creditcard')
+        email = data.get('email')
+    except KeyError as e:
+        return jsonify({"message": f"Missing field {str(e)}"}), 400
+    except TypeError:
+        return jsonify({"message": "There is something wrong with the request"}), 400
+
+    try:
+        async with AsyncSessionLocal() as session:
+            # Add new customer to the system
+            await session.execute(
+                sql.text("""
+                    INSERT INTO customers (address, email, creditcard, username, password)
+                    VALUES (:address, :email, :creditcard, :username, :password)
+                """),
+                {
+                    'address': address,
+                    'email': email,
+                    'creditcard': creditcard,
+                    'username': username,
+                    'password': password
+                }
+            )
+
+            await session.commit()
+            return jsonify({"message": "User registered successfully"}), 201
+        
+    except sql.IntegrityError as e:
+        # Rollback the session in case of error
+        await session.rollback()
+
+        if "unique constraint" in str(e.orig):
+            return jsonify({"error": "User already exists"}), 400
         else:
-            return quart.Response(utils.build_not_found_response(), status=404)
+            return jsonify({"error": "Database error during registration"}), 500
+
+    except Exception as e:
+        # Rollback the session in case of an unexpected error
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+        
+
+@app.route('/login', methods=['POST'])
+async def login():
+    data = await request.get_json()
+
+    try:
+        email = data.get('email')
+        password = data.get('password')
+    except KeyError as e:
+        return jsonify({"message": f"Missing field {str(e)}"}), 400
+    except TypeError:
+        return jsonify({"message": f"There is something wrong with the request."}), 400
+    
+    try:
+        async with AsyncSessionLocal() as session:
+            # Search for the customer in the system
+            result = await session.execute(
+                sql.text("SELECT * FROM customers WHERE email = :email"),
+                {'email': email}
+            )
+            customer = result.fetchone()
+
+        # Check if the customer credentials are valid
+        if customer and hash(customer.password) == password:
+            return jsonify({"customerid": customer.customerid, "message": "Login successful"}), 200
+        else:
+            return jsonify({"message": "Invalid credentials"}), 401
+    except Exception as e:
+        # Rollback the session in case of an unexpected error
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+    
+
+@app.route('/delete/<customerid>', methods=['DELETE'])
+async def delete_user(customerid):
+    
+    try:
+        async with AsyncSessionLocal() as session:
+            # Query the deletion of that user
+            result = await session.execute(
+                sql.text("""
+                    DELETE FROM customers WHERE customerid = :customerid
+                    """),
+                {'customerid': customerid}
+            )
+            await session.commit()
+
+            if result.rowcount == 0:
+                return jsonify({"error": "User not found"}), 404
+
+            return jsonify({"message": "User deleted successfully"}), 200
+
+    except Exception as e:
+        # Rollback the session in case of an unexpected error
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 
-@app.route('/file/<uid>', methods=['GET'])
-async def list_documents(uid):
-    """
-    Lists the library associated to a user. It will return a 401 Unauthorized
-    Response if anybody but the user tries to list the library
-    """
-    auth_token = utils.get_access_token(
-        quart.request.headers.get('Authorization'))
-    if len(auth_token) == 0:
-        return quart.Response(
-            utils.build_unauthorized_response(), status=401)
+@app.route('/balance/<customerid>', methods=['POST', 'PUT'])
+async def add_balance(customerid):
+    data = await request.get_json()
 
-    # Validate token communicating with the user server
-    if utils.validate_token(auth_token, uid):
-        try:
-            files = os.listdir(utils.build_absolute_path(f'file/{uid}'))
-            return quart.Response(
-                response=utils.build_html_list_of_files(files))
-        except FileNotFoundError:
-            return quart.Response(utils.build_not_found_response(), status=404)
-    else:
-        return quart.Response(utils.build_unauthorized_response(), status=401)
+    try:
+        amount = data.get('amount')
+    except KeyError as e:
+        return jsonify({"message": f"Missing field {str(e)}"}), 400
+    except TypeError:
+        return jsonify({"message": f"There is something wrong with the request"}), 400
+
+    if amount <= 0:
+        return jsonify({"message": "Amount must be greater than 0"}), 400
+
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                sql.text("UPDATE customers SET balance = balance + :amount WHERE customerid = :customerid"),
+                {'amount': amount, 'customerid': customerid}
+            )
+            await session.commit()
+
+            if result.rowcount == 0:
+                return jsonify({"error": "User not found"}), 404
+            
+            return jsonify({"message": "Balance updated successfully"}), 200
+        
+    except Exception as e:
+        # Rollback the session in case of an unexpected error
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 
-@app.route('/file/<uid>/<filename>', methods=['PUT'])
-async def add_file(uid, filename):
-    """
-    Adds a file to the user's library whose uid corresponds to the one in the
-    url and only allows the owner to do so. As it is stated in the practice
-    guide if the file already exists, then it is replaced with a new one.
-    """
-    auth_token = utils.get_access_token(
-        quart.request.headers.get('Authorization'))
-    if len(auth_token) == 0:
-        return quart.Response(
-            utils.build_unauthorized_response(), status=401)
+@app.route('/products', methods=['GET'])
+async def get_products():
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                sql.text('''SELECT prod_id, movietitle, year, directorname, price, description, stock 
+                            FROM products NATURAL JOIN imdb_movies 
+                            NATURAL JOIN imdb_directormovies 
+                            NATURAL JOIN imdb_directors
+                            NATURAL JOIN inventory''')
+            )
+            products = [dict(row) for row in result.fetchall()]
 
-    data = await quart.request.get_data()
+            if not products:
+                return jsonify({"error": "No products on database"}), 404
+            
+            return jsonify({"data": products}), 200
+        
+    except Exception as e:
+        # Rollback the session in case of an unexpected error
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
-    # Validate token communicating with the user server
-    if utils.validate_token(auth_token, uid):
-        file_path = utils.build_absolute_path(f'file/{uid}/{filename}')
-        update = os.path.isfile(file_path)
-        try:
-            with open(file_path, 'wb') as file:
-                file.write(data)
 
-            if update:
-                return quart.Response(f"File {filename} updated successfully "
-                                      "in user's library\n", status=201)
+@app.route('/order/customerid', methods=['PUT'])
+async def create_order(customerid):
+    try:
+        orderdate = datetime.now().strftime('%Y-%m-%d')
+        
+        async with AsyncSessionLocal() as session:
+            # Insert the new order and retrieve the generated orderid
+            result = await session.execute(
+                sql.text('''
+                    INSERT INTO orders (customerid, orderdate)
+                    VALUES (:customerid, :orderdate)
+                    RETURNING orderid
+                '''),
+                {'customerid': customerid, 'orderdate': orderdate}
+            )
+            await session.commit()
+
+            # Return the orderid in the response
+            return jsonify({"orderid": result.scalar(), "message": "Order created successfully"}), 201
+        
+    except Exception as e:
+        # Rollback the session in case of an unexpected error
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+
+@app.route('/orders/<customerid>', methods=['GET'])
+async def get_customer_orders(customerid):
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                sql.text('''SELECT orderid, orderdate, totalamount, status
+                            FROM orders
+                            WHERE customerid = :customerid'''),
+                {'customerid': customerid}
+            )
+            orders = [dict(row) for row in result.fetchall()]
+
+            if not orders:
+                return jsonify({"error": "No orders made by the customer yet."}), 404
+            
+            return jsonify({"data": orders}), 200
+        
+    except Exception as e:
+        # Rollback the session in case of an unexpected error
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+
+@app.route('/order/<orderid>', methods=['GET'])
+async def get_order_details(orderid):
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                sql.text('''SELECT orderid, orderdate, netamount, tax totalamount, status
+                            FROM orders
+                            WHERE orderid = :orderid'''),
+                {'orderid': orderid}
+            )
+            order = result.fetchone()
+
+            result = await session.execute(
+                sql.text('''SELECT p.prod_id, movietitle, year, directorname, p.price, quantity, description, stock 
+                            FROM products as p
+                            NATURAL JOIN imdb_movies 
+                            NATURAL JOIN imdb_directormovies 
+                            NATURAL JOIN imdb_directors
+                            NATURAL JOIN inventory
+                            INNER JOIN orderdetail AS o ON o.prod_id = p.prod_id
+                            WHERE o.orderid = :orderid'''),
+                {'orderid': orderid}
+            )
+
+            products = [dict(row) for row in result.fetchall()]
+
+            if not products:            
+                return jsonify({"data": order}), 200
             else:
-                return quart.Response(f"File {filename} added successfully in "
-                                      "user's library\n", status=201)
+                return jsonify({"data": {"order": order, "products": products}}), 200
+        
+    except Exception as e:
+        # Rollback the session in case of an unexpected error
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+    
 
-        except OSError:
-            return quart.Response(
-                utils.build_internal_server_error(), status=500)
-    else:
-        return quart.Response(utils.build_unauthorized_response(), status=401)
+@app.route('/order/<orderid>', methods=['DELETE'])
+async def delete_order(orderid):
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                sql.text('''DELETE FROM orders
+                            WHERE orderid = :orderid'''),
+                {'orderid': orderid}
+            )
+
+            if result.rowcount == 0:
+                return jsonify({"error": "User not found"}), 404
+            
+            return jsonify({"message": "Order removed successfully"}), 200
+
+    except Exception as e:
+        # Rollback the session in case of an unexpected error
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+    
+
+@app.route('/order/<orderid>/products', methods=['PUT', 'POST'])
+async def add_product(orderid):
+    data = await request.get_json()
+
+    try:
+        prod_id = data.get('prod_id')
+        quantity = data.get('quantity')
+    except KeyError as e:
+        return jsonify({"message": f"Missing field {str(e)}"}), 400
+    except TypeError:
+        return jsonify({"message": f"There is something wrong with the request"}), 400
+    
+    if quantity <= 0:
+        return jsonify({"message": f"Cannot add zero or less products"}), 400
+
+    try:
+        async with AsyncSessionLocal() as session:
+            # Find or create a cart order
+            result = await session.execute(
+                sql.text("SELECT * FROM orders WHERE orderid = :orderid"),
+                {'orderid': orderid}
+            )
+
+            if result.rowcount == 0:
+                return jsonify({"error": "Order not found"}), 404
+
+            await session.execute(
+                sql.text("""
+                    INSERT INTO orderdetail (orderid, prod_id, quantity)
+                    VALUES (:orderid, :prod_id, :quantity)
+                    ON CONFLICT (orderid, prod_id)
+                    DO UPDATE SET quantity = orderdetail.quantity + :quantity
+                """),
+                {'orderid': orderid, 'prod_id': prod_id, 'quantity': quantity}
+            )
+
+            await session.commit()
+
+            return jsonify({"message": "Product added to order successfully"}), 200
+                        
+    except Exception as e:
+        # Rollback the session in case of an unexpected error
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 
-@app.route('/file/<uid>/<filename>', methods=['GET'])
-async def send_file(uid, filename):
-    """
-    This function sends a file from the user's library whose uid coincides
-    with the <uid> parameter and name coincides with the filename specified
-    by the requester.
-    """
-    auth_token = utils.get_access_token(
-        quart.request.headers.get('Authorization'))
-    if len(auth_token) == 0:
-        return quart.Response(
-            utils.build_unauthorized_response(), status=401)
+@app.route('/order/<orderid>/products', methods=['DELETE'])
+async def remove_product(orderid):
+    data = await request.get_json()
 
-    # Validate token communicating with the user server
-    if utils.validate_token(auth_token, None):
-        file_path = utils.build_absolute_path(f'file/{uid}/{filename}')
-        if os.path.isfile(file_path):
-            return await quart.send_file(file_path, as_attachment=True)
+    try:
+        prod_id = data.get('prod_id')
+        quantity = data.get('quantity')
+    except KeyError as e:
+        return jsonify({"message": f"Missing field {str(e)}"}), 400
+    except TypeError:
+        return jsonify({"message": f"There is something wrong with the request"}), 400
+
+    if quantity <= 0:
+        return jsonify({"message": f"Cannot remove zero or less products"}), 400
+
+    try:
+        async with AsyncSessionLocal() as session:
+            # Check if the order exists
+            result = await session.execute(
+                sql.text("SELECT * FROM orders WHERE orderid = :orderid"),
+                {'orderid': orderid}
+            )
+
+            if result.rowcount == 0:
+                return jsonify({"error": "Order not found"}), 404
+
+            # Check if the product exists in the order and retrieve the current quantity
+            result = await session.execute(
+                sql.text("""
+                    SELECT quantity FROM orderdetail
+                    WHERE orderid = :orderid AND prod_id = :prod_id
+                """),
+                {'orderid': orderid, 'prod_id': prod_id}
+            )
+
+            if result.rowcount == 0:
+                return jsonify({"error": "Product not found in order"}), 404
+
+            current_quantity = result.scalar()
+
+            if current_quantity < quantity:
+                return jsonify({"error": "Not enough product quantity to remove"}), 400
+
+            # Update the quantity in the orderdetail table by subtracting the given quantity
+            if current_quantity == quantity:
+                # If the quantity to be removed is equal to the current quantity, delete the product entry
+                await session.execute(
+                    sql.text("""
+                        DELETE FROM orderdetail
+                        WHERE orderid = :orderid AND prod_id = :prod_id
+                    """),
+                    {'orderid': orderid, 'prod_id': prod_id}
+                )
+            else:
+                # If the quantity to be removed is less than the current quantity, just update the quantity
+                await session.execute(
+                    sql.text("""
+                        UPDATE orderdetail
+                        SET quantity = quantity - :quantity
+                        WHERE orderid = :orderid AND prod_id = :prod_id
+                    """),
+                    {'orderid': orderid, 'prod_id': prod_id, 'quantity': quantity}
+                )
+
+            # Commit the changes
+            await session.commit()
+
+            return jsonify({"message": "Product quantity removed from order successfully"}), 200
+    
+    except Exception as e:
+        # Rollback the session in case of an unexpected error
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+
+@app.route('/order/<orderid>/pay', methods=['PUT'])
+async def pay_order(orderid):
+    try:
+        # Retrieve the order status
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                sql.text("""
+                    SELECT status FROM orders WHERE orderid = :orderid
+                """),
+                {'orderid': orderid}
+            )
+
+            if result.rowcount == 0:
+                return jsonify({"error": "Order not found"}), 404
+
+            order_status = result.scalar()
+
+            # Check if the order status is 'Processed'
+            if order_status != 'Processed':
+                return jsonify({"error": "Order cannot be paid because it is not 'Processed'"}), 400
+
+            # Update the order status to 'Paid', due to previously made
+            # trigger all possible failures have already been considered
+            await session.execute(
+                sql.text("""
+                    UPDATE orders
+                    SET status = 'Paid'
+                    WHERE orderid = :orderid
+                """),
+                {'orderid': orderid}
+            )
+
+            # Commit the transaction
+            await session.commit()
+
+            return jsonify({"message": "Order successfully paid"}), 200
+
+    except sql.SQLAlchemyError as e:
+        await session.rollback()
+
+        # Check for the specific database error or notice
+        if 'NOTICE' in str(e.orig):
+            return jsonify({"error": f"Error: {str(e.orig)}"}), 400
         else:
-            return quart.Response(utils.build_not_found_response(), status=404)
-    else:
-        return quart.Response(utils.build_unauthorized_response(), status=401)
+            return jsonify({"error": f"Error: {str(e)}"}), 500
 
-
-@app.route('/file/<uid>/<filename>', methods=['DELETE'])
-async def delete_file(uid, filename):
-    """
-    This function deletes a file from the user's library. Only the owner of
-    the library can remove files from it.
-    """
-    auth_token = utils.get_access_token(
-        quart.request.headers.get('Authorization'))
-    if len(auth_token) == 0:
-        return quart.Response(
-            utils.build_unauthorized_response(), status=401)
-
-    # Validate token communicating with the user server
-    if utils.validate_token(auth_token, uid):
-        file_path = utils.build_absolute_path(f'file/{uid}/{filename}')
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            return quart.Response(f"File {filename} successfully "
-                                  f"deleted from user's library\n", status=200)
-        else:
-            return quart.Response(utils.build_not_found_response(), status=404)
-    else:
-        return quart.Response(utils.build_unauthorized_response(), status=401)
-
+    except Exception as e:
+        # Handle unexpected errors
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+    
 
 if __name__ == "__main__":
-    # Create file directory if it does not exist
-    os.makedirs(utils.build_absolute_path('file'), exist_ok=True)
-    app.run(host="file_app",
-            port=int(os.getenv('LIBRARY_SERVER_PORT')))
+    app.run(host='localhost', port=int(os.getenv('API_SERVER_PORT')))
+    # app.run(host="api_db", port=int(os.getenv('API_SERVER_PORT')))

@@ -37,13 +37,18 @@ ADD PRIMARY KEY (actorid, movieid, character),
 ADD CONSTRAINT actormovies_actor_fkey FOREIGN KEY (actorid) REFERENCES imdb_actors(actorid) ON DELETE CASCADE ON UPDATE CASCADE,
 ADD CONSTRAINT actormovies_movie_fkey FOREIGN KEY (movieid) REFERENCES imdb_movies(movieid) ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- Make email be non null and unique along the table
+ALTER TABLE customers
+ALTER COLUMN email SET NOT NULL,
+ADD CONSTRAINT customers_email_unique UNIQUE (email);
+
 -- Add foreign keys to orders table
 ALTER TABLE orders
 ADD CONSTRAINT orders_customer_fkey FOREIGN KEY (customerid) REFERENCES customers(customerid) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- Add foreign keys to orderdetail table and new primary key
 ALTER TABLE orderdetail
--- Although we'd liked to add this in here, the multivalued and repeated rows
+-- Although we'd have added this in here, the multivalued and repeated rows
 -- problem must be handled in another script called actualizaTablas.sql
 -- ADD PRIMARY KEY (orderid, prod_id) -- will be fixed in another script
 ADD CONSTRAINT orderdetail_order_fkey FOREIGN KEY (orderid) REFERENCES orders(orderid) ON DELETE CASCADE ON UPDATE CASCADE,
