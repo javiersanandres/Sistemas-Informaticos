@@ -295,7 +295,6 @@ if __name__ == "__main__":
         delete_customer(customerid, "Finishing test")
         get_order_details(
             orderid, "Non-existing order after deletion of customer")
-
     except Exception as e:
         print(str(e))
         print(

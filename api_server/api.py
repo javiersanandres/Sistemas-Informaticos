@@ -65,16 +65,15 @@ async def register():
 
             await session.commit()
             return jsonify({"message": "User registered successfully"}), 201
-
     except sql.exc.IntegrityError as e:
         # Rollback the session in case of error
         await session.rollback()
 
+        # Error caused because user already exists
         if "unique constraint" in str(e.orig):
             return jsonify({"error": "User already exists"}), 400
-        else:
-            return jsonify({"error": "Database error during registration"}), 500
-
+        
+        return jsonify({"error": "Database error during registration"}), 500
     except Exception as e:
         # Rollback the session in case of an unexpected error
         await session.rollback()
@@ -116,8 +115,8 @@ async def login():
         # Check if the customer credentials are valid
         if customer and password == customer.password:
             return jsonify({"customerid": customer.customerid, "message": "Login successful"}), 200
-        else:
-            return jsonify({"message": "Invalid credentials"}), 401
+        
+        return jsonify({"message": "Invalid credentials"}), 401
     except Exception as e:
         # Rollback the session in case of an unexpected error
         await session.rollback()
@@ -184,6 +183,7 @@ async def get_user_details(customerid):
                 {'customerid': customerid}
             )
 
+            # Unknown user
             if result.rowcount == 0:
                 return jsonify({"error": "User not found"}), 404
 
@@ -256,11 +256,11 @@ async def get_products():
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
-                sql.text('''SELECT prod_id, movietitle, year, directorname, price, description, stock 
+                sql.text("""SELECT prod_id, movietitle, year, directorname, price, description, stock 
                             FROM products NATURAL JOIN imdb_movies 
                             NATURAL JOIN imdb_directormovies 
                             NATURAL JOIN imdb_directors
-                            NATURAL JOIN inventory''')
+                            NATURAL JOIN inventory""")
             )
             if result.rowcount == 0:
                 return jsonify({"error": "No products on database"}), 404
@@ -268,7 +268,6 @@ async def get_products():
             products = [dict(row) for row in result.mappings().all()]
 
             return jsonify({"data": products}), 200
-        
     except Exception as e:
         # Rollback the session in case of an unexpected error
         await session.rollback()
@@ -291,19 +290,20 @@ async def get_products_details(prod_id):
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
-                sql.text('''SELECT prod_id, movietitle, year, directorname, price, description, stock 
+                sql.text("""SELECT prod_id, movietitle, year, directorname, price, description, stock 
                             FROM products NATURAL JOIN imdb_movies 
                             NATURAL JOIN imdb_directormovies 
                             NATURAL JOIN imdb_directors
                             NATURAL JOIN inventory
-                            WHERE prod_id = :prod_id'''),
-                {'prod_id' : prod_id}
+                            WHERE prod_id = :prod_id"""),
+                {'prod_id': prod_id}
             )
+
+            # Unknown product
             if result.rowcount == 0:
                 return jsonify({"error": "No such product on database"}), 404
 
             return jsonify({"data": dict(result.mappings().first())}), 200
-        
     except Exception as e:
         # Rollback the session in case of an unexpected error
         await session.rollback()
@@ -336,17 +336,16 @@ async def create_order(customerid):
 
             # Insert the new order and retrieve the generated orderid
             await session.execute(
-                sql.text('''
+                sql.text("""
                     INSERT INTO orders (orderid, customerid, orderdate)
                     VALUES (:orderid, :customerid, :orderdate)
-                '''),
+                """),
                 {'orderid': orderid, 'customerid': customerid, 'orderdate': orderdate}
             )
             await session.commit()
 
             # Return the orderid in the response
             return jsonify({"orderid": orderid, "message": "Order created successfully"}), 201
-        
     except Exception as e:
         # Rollback the session in case of an unexpected error
         await session.rollback()
@@ -369,9 +368,9 @@ async def get_customer_orders(customerid):
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
-                sql.text('''SELECT orderid, orderdate, totalamount, status
+                sql.text("""SELECT orderid, orderdate, totalamount, status
                             FROM orders
-                            WHERE customerid = :customerid'''),
+                            WHERE customerid = :customerid"""),
                 {'customerid': customerid}
             )
 
@@ -380,7 +379,6 @@ async def get_customer_orders(customerid):
             
             orders = [dict(row) for row in result.mappings().all()]
             return jsonify({"data": orders}), 200
-        
     except Exception as e:
         # Rollback the session in case of an unexpected error
         await session.rollback()
@@ -404,9 +402,9 @@ async def get_order_details(orderid):
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
-                sql.text('''SELECT orderid, orderdate, netamount, tax, totalamount, status
+                sql.text("""SELECT orderid, orderdate, netamount, tax, totalamount, status
                             FROM orders
-                            WHERE orderid = :orderid'''),
+                            WHERE orderid = :orderid"""),
                 {'orderid': orderid}
             )
 
@@ -415,23 +413,22 @@ async def get_order_details(orderid):
 
             order = dict(result.mappings().first())
             result = await session.execute(
-                    sql.text('''SELECT p.prod_id, movietitle, year, directorname, p.price, quantity, description, stock 
+                    sql.text("""SELECT p.prod_id, movietitle, year, directorname, p.price, quantity, description, stock 
                                 FROM products as p
                                 NATURAL JOIN imdb_movies 
                                 NATURAL JOIN imdb_directormovies 
                                 NATURAL JOIN imdb_directors
                                 NATURAL JOIN inventory
                                 INNER JOIN orderdetail AS o ON o.prod_id = p.prod_id
-                                WHERE o.orderid = :orderid'''),
+                                WHERE o.orderid = :orderid"""),
                     {'orderid': orderid}
                 )
 
             if result.rowcount == 0:            
                 return jsonify({"data": order}), 200
-            else:
-                products = [dict(row) for row in result.mappings().all()]
-                return jsonify({"data": {"order": order, "products": products}}), 200
-        
+            
+            products = [dict(row) for row in result.mappings().all()]
+            return jsonify({"data": {"order": order, "products": products}}), 200
     except Exception as e:
         # Rollback the session in case of an unexpected error
         await session.rollback()
@@ -453,8 +450,8 @@ async def delete_order(orderid):
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
-                sql.text('''DELETE FROM orders
-                            WHERE orderid = :orderid'''),
+                sql.text("""DELETE FROM orders
+                            WHERE orderid = :orderid"""),
                 {'orderid': orderid}
             )
             await session.commit()
@@ -463,7 +460,6 @@ async def delete_order(orderid):
                 return jsonify({"error": "User not found"}), 404
             
             return jsonify({"message": "Order removed successfully"}), 200
-
     except Exception as e:
         # Rollback the session in case of an unexpected error
         await session.rollback()
@@ -521,7 +517,6 @@ async def add_product(orderid):
             await session.commit()
 
             return jsonify({"message": "Product added to order successfully"}), 200
-                        
     except Exception as e:
         # Rollback the session in case of an unexpected error
         await session.rollback()
@@ -609,7 +604,6 @@ async def remove_product(orderid):
             await session.commit()
 
             return jsonify({"message": "Product quantity removed from order successfully"}), 200
-    
     except Exception as e:
         # Rollback the session in case of an unexpected error
         await session.rollback()
@@ -664,18 +658,16 @@ async def pay_order(orderid):
             await session.commit()
 
             return jsonify({"message": "Order successfully paid"}), 200
-
     except sql.exc.SQLAlchemyError as e:
         await session.rollback()
 
         error_message = str(e.orig).split(":")[-1].strip()  # Get the actual error message
         return jsonify({"error": error_message}), 400
-
     except Exception as e:
         # Handle unexpected errors
         await session.rollback()
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
-    
+
 
 if __name__ == "__main__":
     app.run(host="api_db", port=int(os.getenv('API_SERVER_PORT')))
