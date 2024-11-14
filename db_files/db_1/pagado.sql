@@ -5,6 +5,11 @@ DECLARE
 	order_prod record;
 	customer_order record;
 BEGIN
+	-- Check if the OLD.status is not NULL
+	IF OLD.status IS NOT NULL THEN
+		RAISE EXCEPTION 'Cannot pay order as the order is in Paid, Processed or Shipped state';
+	END IF;
+
 	-- Update inventory
 	FOR order_prod IN (
 		SELECT p.prod_id, quantity, stock, sales

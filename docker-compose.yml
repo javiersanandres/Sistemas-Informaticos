@@ -21,7 +21,7 @@ services:
     ports:
       - "127.0.0.1:5010:5432"
     volumes:
-      - ./db_files/db_1/dump_p2_v1.sql.gz:/docker-entrypoint-initdb.d/1_data.sql.gz
+      - ./dump_p2_v1.sql.gz:/docker-entrypoint-initdb.d/1_data.sql.gz
 
   db2:
     image: postgres:14.8
@@ -33,7 +33,7 @@ services:
     ports:
       - "127.0.0.1:5011:5432"
     volumes:
-      - ./db_files/db_2/dump_p2_v2.sql.gz:/docker-entrypoint-initdb.d/2_data.sql.gz
+      - ./dump_p2_v2.sql.gz:/docker-entrypoint-initdb.d/2_data.sql.gz
 volumes:
   db1-data:
   db2-data:
