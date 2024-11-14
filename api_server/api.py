@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 import sqlalchemy as sql
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from datetime import datetime
+from werkzeug.security import check_password_hash
 
 app = Quart(__name__)
 load_dotenv()
@@ -28,13 +29,21 @@ async def register():
 
     try:
         async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                sql.text("""
+                SELECT MAX(customerid) FROM customers
+                """))
+
+            customerid = result.scalar() + 1
+
             # Add new customer to the system
             await session.execute(
                 sql.text("""
-                    INSERT INTO customers (address, email, creditcard, username, password)
-                    VALUES (:address, :email, :creditcard, :username, :password)
+                    INSERT INTO customers (customerid, address, email, creditcard, username, password)
+                    VALUES (:customerid, :address, :email, :creditcard, :username, :password)
                 """),
                 {
+                    'customerid' : customerid,
                     'address': address,
                     'email': email,
                     'creditcard': creditcard,
@@ -45,8 +54,8 @@ async def register():
 
             await session.commit()
             return jsonify({"message": "User registered successfully"}), 201
-        
-    except sql.IntegrityError as e:
+
+    except sql.exc.IntegrityError as e:
         # Rollback the session in case of error
         await session.rollback()
 
@@ -59,7 +68,7 @@ async def register():
         # Rollback the session in case of an unexpected error
         await session.rollback()
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
-        
+
 
 @app.route('/login', methods=['POST'])
 async def login():
@@ -72,7 +81,7 @@ async def login():
         return jsonify({"message": f"Missing field {str(e)}"}), 400
     except TypeError:
         return jsonify({"message": f"There is something wrong with the request."}), 400
-    
+
     try:
         async with AsyncSessionLocal() as session:
             # Search for the customer in the system
@@ -83,7 +92,7 @@ async def login():
             customer = result.fetchone()
 
         # Check if the customer credentials are valid
-        if customer and hash(customer.password) == password:
+        if customer and check_password_hash(password, customer.password):
             return jsonify({"customerid": customer.customerid, "message": "Login successful"}), 200
         else:
             return jsonify({"message": "Invalid credentials"}), 401
@@ -91,9 +100,9 @@ async def login():
         # Rollback the session in case of an unexpected error
         await session.rollback()
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
-    
 
-@app.route('/delete/<customerid>', methods=['DELETE'])
+
+@app.route('/<int:customerid>', methods=['DELETE'])
 async def delete_user(customerid):
     
     try:
@@ -117,13 +126,38 @@ async def delete_user(customerid):
         await session.rollback()
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
+@app.route('/<int:customerid>', methods=['GET'])
+async def get_user_details(customerid):
 
-@app.route('/balance/<customerid>', methods=['POST', 'PUT'])
+    try:
+        async with AsyncSessionLocal() as session:
+            # Query the deletion of that user
+            result = await session.execute(
+                sql.text("""
+                    SELECT address, email, creditcard, username, password, balance 
+                    FROM customers 
+                    WHERE customerid = :customerid
+                    """),
+                {'customerid': customerid}
+            )
+
+            if result.rowcount == 0:
+                return jsonify({"error": "User not found"}), 404
+
+            return jsonify({"data": dict(result.mappings().first())}), 200
+
+    except Exception as e:
+        # Rollback the session in case of an unexpected error
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+
+@app.route('/balance/<int:customerid>', methods=['POST', 'PUT'])
 async def add_balance(customerid):
     data = await request.get_json()
 
     try:
-        amount = data.get('amount')
+        amount = round(float(data.get('amount')), 2)
     except KeyError as e:
         return jsonify({"message": f"Missing field {str(e)}"}), 400
     except TypeError:
@@ -142,9 +176,9 @@ async def add_balance(customerid):
 
             if result.rowcount == 0:
                 return jsonify({"error": "User not found"}), 404
-            
+
             return jsonify({"message": "Balance updated successfully"}), 200
-        
+
     except Exception as e:
         # Rollback the session in case of an unexpected error
         await session.rollback()
@@ -162,11 +196,11 @@ async def get_products():
                             NATURAL JOIN imdb_directors
                             NATURAL JOIN inventory''')
             )
-            products = [dict(row) for row in result.fetchall()]
-
-            if not products:
+            if result.rowcount == 0:
                 return jsonify({"error": "No products on database"}), 404
-            
+
+            products = [dict(row) for row in result.mappings().all()]
+
             return jsonify({"data": products}), 200
         
     except Exception as e:
@@ -174,26 +208,23 @@ async def get_products():
         await session.rollback()
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
-
-@app.route('/order/customerid', methods=['PUT'])
-async def create_order(customerid):
+@app.route('/products/<int:prod_id>', methods=['GET'])
+async def get_products_details(prod_id):
     try:
-        orderdate = datetime.now().strftime('%Y-%m-%d')
-        
         async with AsyncSessionLocal() as session:
-            # Insert the new order and retrieve the generated orderid
             result = await session.execute(
-                sql.text('''
-                    INSERT INTO orders (customerid, orderdate)
-                    VALUES (:customerid, :orderdate)
-                    RETURNING orderid
-                '''),
-                {'customerid': customerid, 'orderdate': orderdate}
+                sql.text('''SELECT prod_id, movietitle, year, directorname, price, description, stock 
+                            FROM products NATURAL JOIN imdb_movies 
+                            NATURAL JOIN imdb_directormovies 
+                            NATURAL JOIN imdb_directors
+                            NATURAL JOIN inventory
+                            WHERE prod_id = :prod_id'''),
+                {'prod_id' : prod_id}
             )
-            await session.commit()
+            if result.rowcount == 0:
+                return jsonify({"error": "No such product on database"}), 404
 
-            # Return the orderid in the response
-            return jsonify({"orderid": result.scalar(), "message": "Order created successfully"}), 201
+            return jsonify({"data": dict(result.mappings().first())}), 200
         
     except Exception as e:
         # Rollback the session in case of an unexpected error
@@ -201,7 +232,39 @@ async def create_order(customerid):
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 
-@app.route('/orders/<customerid>', methods=['GET'])
+@app.route('/order/<int:customerid>', methods=['PUT'])
+async def create_order(customerid):
+    try:
+        orderdate = datetime.now()
+        
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                sql.text("""
+                    SELECT MAX(orderid) FROM orders
+                """))
+
+            orderid = result.scalar() + 1
+
+            # Insert the new order and retrieve the generated orderid
+            await session.execute(
+                sql.text('''
+                    INSERT INTO orders (orderid, customerid, orderdate)
+                    VALUES (:orderid, :customerid, :orderdate)
+                '''),
+                {'orderid': orderid, 'customerid': customerid, 'orderdate': orderdate}
+            )
+            await session.commit()
+
+            # Return the orderid in the response
+            return jsonify({"orderid": orderid, "message": "Order created successfully"}), 201
+        
+    except Exception as e:
+        # Rollback the session in case of an unexpected error
+        await session.rollback()
+        return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+
+@app.route('/orders/<int:customerid>', methods=['GET'])
 async def get_customer_orders(customerid):
     try:
         async with AsyncSessionLocal() as session:
@@ -211,11 +274,11 @@ async def get_customer_orders(customerid):
                             WHERE customerid = :customerid'''),
                 {'customerid': customerid}
             )
-            orders = [dict(row) for row in result.fetchall()]
 
-            if not orders:
+            if result.rowcount == 0:
                 return jsonify({"error": "No orders made by the customer yet."}), 404
             
+            orders = [dict(row) for row in result.mappings().all()]
             return jsonify({"data": orders}), 200
         
     except Exception as e:
@@ -224,17 +287,20 @@ async def get_customer_orders(customerid):
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 
-@app.route('/order/<orderid>', methods=['GET'])
+@app.route('/order/<int:orderid>', methods=['GET'])
 async def get_order_details(orderid):
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
-                sql.text('''SELECT orderid, orderdate, netamount, tax totalamount, status
+                sql.text('''SELECT orderid, orderdate, netamount, tax, totalamount, status
                             FROM orders
                             WHERE orderid = :orderid'''),
                 {'orderid': orderid}
             )
-            order = result.fetchone()
+            order = dict(result.mappings().first())
+
+            if result.rowcount == 0:
+                return jsonify({"error": "No orders with that id."}), 404
 
             result = await session.execute(
                 sql.text('''SELECT p.prod_id, movietitle, year, directorname, p.price, quantity, description, stock 
@@ -248,9 +314,9 @@ async def get_order_details(orderid):
                 {'orderid': orderid}
             )
 
-            products = [dict(row) for row in result.fetchall()]
+            products = [dict(row) for row in result.mappings().all()]
 
-            if not products:            
+            if result.rowcount == 0:            
                 return jsonify({"data": order}), 200
             else:
                 return jsonify({"data": {"order": order, "products": products}}), 200
@@ -261,7 +327,7 @@ async def get_order_details(orderid):
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
     
 
-@app.route('/order/<orderid>', methods=['DELETE'])
+@app.route('/order/<int:orderid>', methods=['DELETE'])
 async def delete_order(orderid):
     try:
         async with AsyncSessionLocal() as session:
@@ -270,6 +336,7 @@ async def delete_order(orderid):
                             WHERE orderid = :orderid'''),
                 {'orderid': orderid}
             )
+            await session.commit()
 
             if result.rowcount == 0:
                 return jsonify({"error": "User not found"}), 404
@@ -282,13 +349,13 @@ async def delete_order(orderid):
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
     
 
-@app.route('/order/<orderid>/products', methods=['PUT', 'POST'])
+@app.route('/order/<int:orderid>/products', methods=['PUT', 'POST'])
 async def add_product(orderid):
     data = await request.get_json()
 
     try:
-        prod_id = data.get('prod_id')
-        quantity = data.get('quantity')
+        prod_id = int(data.get('prod_id'))
+        quantity = int(data.get('quantity'))
     except KeyError as e:
         return jsonify({"message": f"Missing field {str(e)}"}), 400
     except TypeError:
@@ -328,13 +395,13 @@ async def add_product(orderid):
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 
-@app.route('/order/<orderid>/products', methods=['DELETE'])
+@app.route('/order/<int:orderid>/products', methods=['DELETE'])
 async def remove_product(orderid):
     data = await request.get_json()
 
     try:
-        prod_id = data.get('prod_id')
-        quantity = data.get('quantity')
+        prod_id = int(data.get('prod_id'))
+        quantity = int(data.get('quantity'))
     except KeyError as e:
         return jsonify({"message": f"Missing field {str(e)}"}), 400
     except TypeError:
@@ -403,7 +470,7 @@ async def remove_product(orderid):
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
 
 
-@app.route('/order/<orderid>/pay', methods=['PUT'])
+@app.route('/order/<int:orderid>/pay', methods=['POST'])
 async def pay_order(orderid):
     try:
         # Retrieve the order status
@@ -421,8 +488,8 @@ async def pay_order(orderid):
             order_status = result.scalar()
 
             # Check if the order status is 'Processed'
-            if order_status != 'Processed':
-                return jsonify({"error": "Order cannot be paid because it is not 'Processed'"}), 400
+            if order_status is not None:
+                return jsonify({"error": f"Order cannot be paid because it is in {order_status} state"}), 400
 
             # Update the order status to 'Paid', due to previously made
             # trigger all possible failures have already been considered
@@ -440,14 +507,11 @@ async def pay_order(orderid):
 
             return jsonify({"message": "Order successfully paid"}), 200
 
-    except sql.SQLAlchemyError as e:
+    except sql.exc.SQLAlchemyError as e:
         await session.rollback()
 
-        # Check for the specific database error or notice
-        if 'NOTICE' in str(e.orig):
-            return jsonify({"error": f"Error: {str(e.orig)}"}), 400
-        else:
-            return jsonify({"error": f"Error: {str(e)}"}), 500
+        error_message = str(e.orig).split(":")[-1].strip()  # Get the actual error message
+        return jsonify({"error": error_message}), 400
 
     except Exception as e:
         # Handle unexpected errors

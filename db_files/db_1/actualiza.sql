@@ -44,7 +44,9 @@ ADD CONSTRAINT customers_email_unique UNIQUE (email);
 
 -- Add foreign keys to orders table
 ALTER TABLE orders
-ADD CONSTRAINT orders_customer_fkey FOREIGN KEY (customerid) REFERENCES customers(customerid) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER COLUMN netamount SET DEFAULT 0.00,
+ALTER COLUMN totalamount SET DEFAULT 0.00,
+ADD CONSTRAINT orders_customer_fkey FOREIGN KEY (customerid) REFERENCES customers(customerid) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- Add foreign keys to orderdetail table and new primary key
 ALTER TABLE orderdetail
