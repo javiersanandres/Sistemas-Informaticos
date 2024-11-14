@@ -1,13 +1,22 @@
 import json
+import os
+from dotenv import load_dotenv
 import requests
-from werkzeug.security import generate_password_hash
 
-api_db_url = 'http://localhost:5000'
+load_dotenv()
+
+api_db_url = 'http://localhost:' + os.getenv('API_SERVER_PORT')
 
 
-def register_customer(username, password, address, creditcard, email, description=""):
+def register_customer(
+        username,
+        password,
+        address,
+        creditcard,
+        email,
+        description=""):
     print("CREATING CUSTOMER: " + description)
-    r = requests.put(url=api_db_url+'/register',
+    r = requests.put(url=api_db_url + '/register',
                      headers={"Content-Type": "application/json"},
                      data=json.dumps({"username": f'{username}',
                                       "password": f'{password}',
@@ -20,7 +29,7 @@ def register_customer(username, password, address, creditcard, email, descriptio
 def login_customer(email, password, description):
     print("LOGIN CUSTOMER: " + description)
     r = requests.post(
-        url=api_db_url+'/login',
+        url=api_db_url + '/login',
         headers={"Content-Type": "application/json"},
         data=json.dumps({"email": f'{email}',
                          "password": f'{password}'}))
@@ -33,18 +42,18 @@ def login_customer(email, password, description):
 def delete_customer(customerid, description):
     print("DELETE CUSTOMER: " + description)
     r = requests.delete(
-        url=api_db_url+f'/{customerid}',
+        url=api_db_url + f'/{customerid}',
         headers={"Content-Type": "application/json"})
-    
+
     print(r.text)
 
 
 def get_user_details(customerid, description):
     print("CUSTOMER INFORMATION: " + description)
     r = requests.get(
-        url=api_db_url+f'/{customerid}',
+        url=api_db_url + f'/{customerid}',
         headers={"Content-Type": "application/json"})
-    
+
     print(json.loads(r.text)['data'])
     print("")
 
@@ -52,35 +61,36 @@ def get_user_details(customerid, description):
 def add_balance(customerid, amount, description):
     print("ADD BALANCE TO CUSTOMER: " + description)
     r = requests.post(
-        url=api_db_url+f'/balance/{customerid}',
+        url=api_db_url + f'/balance/{customerid}',
         headers={"Content-Type": "application/json"},
         data=json.dumps({"amount": f'{amount}'}))
-    
+
     print(r.text)
 
 
 def get_products(num_rows):
     print(f"GET {num_rows} PRODUCTS")
     r = requests.get(
-        url=api_db_url+f'/products',
+        url=api_db_url + f'/products',
         headers={"Content-Type": "application/json"})
-    
+
     if r.status_code == 200:
         products = json.loads(r.text)
         products = products['data']
-        
+
         for i in range(num_rows):
             print(products[i])
 
         print("")
         return products[:num_rows]
-    
+
     print(r.text)
+
 
 def get_product_details(prod_id, description):
     print(f"GET INFORMATION FOR PRODUCT WITH ID {prod_id}: " + description)
     r = requests.get(
-        url=api_db_url+f'/products/{prod_id}',
+        url=api_db_url + f'/products/{prod_id}',
         headers={"Content-Type": "application/json"})
 
     if r.status_code == 200:
@@ -93,25 +103,27 @@ def get_product_details(prod_id, description):
 def create_order(customerid):
     print(f"CREATE ORDER FOR CUSTOMER WITH ID: {customerid}")
     r = requests.put(
-        url=api_db_url+f'/order/{customerid}',
+        url=api_db_url + f'/order/{customerid}',
         headers={"Content-Type": "application/json"})
     print(r.text)
 
     if r.status_code == 201:
         return json.loads(r.text)['orderid']
-    
+
+
 def delete_order(orderid, description):
     print(f"DELETE ORDER WITH ID {orderid}: " + description)
     r = requests.delete(
-        url=api_db_url+f'/order/{orderid}',
+        url=api_db_url + f'/order/{orderid}',
         headers={"Content-Type": "application/json"})
 
     print(r.text)
-    
+
+
 def get_customer_orders(customerid, description):
     print(f"GET ORDERS FROM CUSTOMER WITH ID {customerid}: " + description)
     r = requests.get(
-        url=api_db_url+f'/orders/{customerid}',
+        url=api_db_url + f'/orders/{customerid}',
         headers={"Content-Type": "application/json"})
 
     if r.status_code == 200:
@@ -121,10 +133,11 @@ def get_customer_orders(customerid, description):
     else:
         print(r.text)
 
+
 def get_order_details(orderid, description):
     print(f"GET INFORMATION FOR ORDER WITH ID {orderid}: " + description)
     r = requests.get(
-        url=api_db_url+f'/order/{orderid}',
+        url=api_db_url + f'/order/{orderid}',
         headers={"Content-Type": "application/json"})
 
     if r.status_code == 200:
@@ -141,31 +154,38 @@ def get_order_details(orderid, description):
             print("")
     else:
         print(r.text)
- 
+
+
 def add_product(orderid, prod_id, quantity, description):
-    print(f"ADD {quantity} OF PRODUCT WITH ID {prod_id} TO ORDER WITH ID {orderid}: " + description)
+    print(
+        f"ADD {quantity} OF PRODUCT WITH ID {prod_id} TO ORDER" +
+        f"WITH ID {orderid}: " + description)
     r = requests.post(
-        url=api_db_url+f'/order/{orderid}/products',
+        url=api_db_url + f'/order/{orderid}/products',
         headers={"Content-Type": "application/json"},
         data=json.dumps({"prod_id": f'{prod_id}',
                         "quantity": f'{quantity}'}))
 
     print(r.text)
+
 
 def remove_product(orderid, prod_id, quantity, description):
-    print(f"REMOVE {quantity} OF PRODUCT WITH ID {prod_id} TO ORDER WITH ID {orderid}: " + description)
+    print(
+        f"REMOVE {quantity} OF PRODUCT WITH ID {prod_id} TO ORDER" +
+        f"WITH ID {orderid}: " + description)
     r = requests.delete(
-        url=api_db_url+f'/order/{orderid}/products',
+        url=api_db_url + f'/order/{orderid}/products',
         headers={"Content-Type": "application/json"},
         data=json.dumps({"prod_id": f'{prod_id}',
                         "quantity": f'{quantity}'}))
 
     print(r.text)
+
 
 def pay_order(orderid, description):
     print(f"PAY ORDER WITH ID {orderid}: " + description)
     r = requests.post(
-        url=api_db_url+f'/order/{orderid}/pay',
+        url=api_db_url + f'/order/{orderid}/pay',
         headers={"Content-Type": "application/json"})
 
     print(r.text)
@@ -173,17 +193,47 @@ def pay_order(orderid, description):
 
 if __name__ == "__main__":
     try:
-        register_customer('pepe1', 'pepe2', 'pepe3', 'pepe4', 'pepe5@gmail.com', 'Non-existing customer')
-        register_customer('pepe1', 'pepe2', 'pepe3', 'pepe4', 'pepe6@gmail.com', 'Non-existing customer')
-        register_customer('adsf', 'adsf', 'adsf', 'adsf', 'pepe5@gmail.com', 'Existing customer')
+        register_customer(
+            'pepe1',
+            'pepe2',
+            'pepe3',
+            'pepe4',
+            'pepe5@gmail.com',
+            'Non-existing customer')
+        register_customer(
+            'pepe1',
+            'pepe2',
+            'pepe3',
+            'pepe4',
+            'pepe6@gmail.com',
+            'Non-existing customer')
+        register_customer(
+            'adsf',
+            'adsf',
+            'adsf',
+            'adsf',
+            'pepe5@gmail.com',
+            'Existing customer')
 
-        login_customer('pepe5@gmail.com', generate_password_hash('pepe'), "Invalid credentials")
-        login_customer('pepe7@gmail.com', generate_password_hash('pepe'), "Non-existing customer")
-        customerid = login_customer('pepe5@gmail.com', generate_password_hash('pepe2'), "Success")
-        customerid2 = login_customer('pepe6@gmail.com', generate_password_hash('pepe2'), "Success")
+        login_customer(
+            'pepe5@gmail.com',
+            'pepe',
+            "Invalid credentials")
+        login_customer(
+            'pepe7@gmail.com',
+            'pepe',
+            "Non-existing customer")
+        customerid = login_customer(
+            'pepe5@gmail.com',
+            'pepe2',
+            "Success")
+        customerid2 = login_customer(
+            'pepe6@gmail.com',
+            'pepe2',
+            "Success")
 
         delete_customer(customerid2, "Existing customer")
-        delete_customer(customerid2+1, "Non-existing customer")
+        delete_customer(customerid2 + 1, "Non-existing customer")
 
         get_user_details(customerid, "Balance before update")
         add_balance(customerid, 0, "Non-positive balance")
@@ -207,23 +257,35 @@ if __name__ == "__main__":
         add_product(orderid2 + 1, 1, 1, "Non existing order")
         add_product(orderid1, 1, 0, "Non-positive quantity")
         add_product(orderid, int(products[0]['prod_id']), 1, "Success")
-        add_product(orderid, int(products[1]['prod_id']), int(products[1]['stock']) + 1, "Success")
+        add_product(
+            orderid, int(
+                products[1]['prod_id']), int(
+                products[1]['stock']) + 1, "Success")
         add_product(orderid, int(products[2]['prod_id']), 2, "Success")
 
         get_order_details(orderid, "After adding two new products")
-        add_product(orderid, int(products[0]['prod_id']), 2, "Same product as before")
-        get_order_details(orderid, "After updating the quantity of one of them")
+        add_product(
+            orderid, int(
+                products[0]['prod_id']), 2, "Same product as before")
+        get_order_details(
+            orderid, "After updating the quantity of one of them")
 
-        remove_product(orderid2+1, 1, 1, "Non existing order")
+        remove_product(orderid2 + 1, 1, 1, "Non existing order")
         remove_product(orderid1, 1, 0, "Non-positive quantity")
         remove_product(orderid, int(products[2]['prod_id']), 1, "Success")
-        get_order_details(orderid, "After updating the quantity of one of them")
-        remove_product(orderid, int(products[2]['prod_id']), 2, "Remove more than possible")
+        get_order_details(
+            orderid, "After updating the quantity of one of them")
+        remove_product(
+            orderid, int(
+                products[2]['prod_id']), 2, "Remove more than possible")
         remove_product(orderid, int(products[2]['prod_id']), 1, "Success")
         get_order_details(orderid, "After fully removing one product")
 
         pay_order(orderid, "More quantity than stock")
-        remove_product(orderid, int(products[1]['prod_id']), int(products[1]['stock']), "Success")
+        remove_product(
+            orderid, int(
+                products[1]['prod_id']), int(
+                products[1]['stock']), "Success")
         pay_order(orderid, "Not enough balance")
         get_order_details(orderid, "Before paying order")
         add_balance(customerid, 1000000, "Enough balance to pay for the order")
@@ -231,7 +293,8 @@ if __name__ == "__main__":
         get_order_details(orderid, "After paying order")
 
         delete_customer(customerid, "Finishing test")
-        get_order_details(orderid, "Non-existing order after deletion of customer")
+        get_order_details(
+            orderid, "Non-existing order after deletion of customer")
 
     except Exception as e:
         print(str(e))

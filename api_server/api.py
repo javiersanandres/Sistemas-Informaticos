@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 import sqlalchemy as sql
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from datetime import datetime
-from werkzeug.security import check_password_hash
 
 app = Quart(__name__)
 load_dotenv()
@@ -15,6 +14,18 @@ AsyncSessionLocal = sql.orm.sessionmaker(bind=engine, class_=AsyncSession, expir
 
 @app.route('/register', methods=['PUT'])
 async def register():
+    """
+    Registers a new user in the system.
+
+    This endpoint handles user registration by collecting user information
+    (username, password, address, credit card, email) and adding the details
+    to the `customers` table in the database.
+
+    Method:
+    -------
+    PUT
+    """
+
     data = await request.get_json()
     try:
         username = data.get('username')
@@ -72,6 +83,17 @@ async def register():
 
 @app.route('/login', methods=['POST'])
 async def login():
+    """
+    Authenticates a user by verifying their email and password.
+
+    This endpoint handles user login by retrieving and validating user credentials
+    (email and password) from the `customers` table in the database.
+
+    Method:
+    -------
+    POST
+    """
+
     data = await request.get_json()
 
     try:
@@ -92,7 +114,7 @@ async def login():
             customer = result.fetchone()
 
         # Check if the customer credentials are valid
-        if customer and check_password_hash(password, customer.password):
+        if customer and password == customer.password:
             return jsonify({"customerid": customer.customerid, "message": "Login successful"}), 200
         else:
             return jsonify({"message": "Invalid credentials"}), 401
@@ -104,7 +126,17 @@ async def login():
 
 @app.route('/<int:customerid>', methods=['DELETE'])
 async def delete_user(customerid):
-    
+    """
+    Deletes a user by customer ID.
+
+    This endpoint handles user deletion by removing the user with the specified
+    `customerid` from the `customers` table in the database.
+
+    Method:
+    -------
+    DELETE
+    """
+
     try:
         async with AsyncSessionLocal() as session:
             # Query the deletion of that user
@@ -128,6 +160,17 @@ async def delete_user(customerid):
 
 @app.route('/<int:customerid>', methods=['GET'])
 async def get_user_details(customerid):
+    """
+    Retrieves details of a user by customer ID.
+
+    This endpoint handles fetching user details (address, email, credit card, username,
+    password, and balance) for the specified `customerid` from the `customers` table in
+    the database.
+
+    Method:
+    -------
+    GET
+    """
 
     try:
         async with AsyncSessionLocal() as session:
@@ -154,6 +197,17 @@ async def get_user_details(customerid):
 
 @app.route('/balance/<int:customerid>', methods=['POST', 'PUT'])
 async def add_balance(customerid):
+    """
+    Adds a specified amount to a user's balance by customer ID.
+
+    This endpoint updates the balance for the user with the given `customerid`,
+    increasing it by the specified `amount` provided in the request data.
+
+    Methods:
+    --------
+    POST, PUT
+    """
+
     data = await request.get_json()
 
     try:
@@ -187,6 +241,18 @@ async def add_balance(customerid):
 
 @app.route('/products', methods=['GET'])
 async def get_products():
+    """
+    Retrieves a list of available products.
+
+    This endpoint fetches product details, including ID, movie title, year,
+    director name, price, description, and stock, by querying multiple tables
+    related to products and inventory.
+
+    Method:
+    -------
+    GET
+    """
+
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
@@ -210,6 +276,18 @@ async def get_products():
 
 @app.route('/products/<int:prod_id>', methods=['GET'])
 async def get_products_details(prod_id):
+    """
+    Retrieves details of a specific product by product ID.
+
+    This endpoint fetches detailed information for a product with the specified 
+    `prod_id`, including movie title, year, director name, price, description, 
+    and stock.
+
+    Method:
+    -------
+    GET
+    """
+
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
@@ -234,6 +312,17 @@ async def get_products_details(prod_id):
 
 @app.route('/order/<int:customerid>', methods=['PUT'])
 async def create_order(customerid):
+    """
+    Creates a new order for a specified customer.
+
+    This endpoint creates a new order for the customer with the specified
+    `customerid`, generating a new `orderid` and storing the order date.
+
+    Method:
+    -------
+    PUT
+    """
+
     try:
         orderdate = datetime.now()
         
@@ -266,6 +355,17 @@ async def create_order(customerid):
 
 @app.route('/orders/<int:customerid>', methods=['GET'])
 async def get_customer_orders(customerid):
+    """
+    Retrieves all orders for a specific customer.
+
+    This endpoint fetches a list of orders made by the customer with the specified
+    `customerid`, including order ID, date, total amount, and status.
+
+    Method:
+    -------
+    GET
+    """
+
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
@@ -289,6 +389,18 @@ async def get_customer_orders(customerid):
 
 @app.route('/order/<int:orderid>', methods=['GET'])
 async def get_order_details(orderid):
+    """
+    Retrieves details of a specific order by order ID.
+
+    This endpoint fetches details of an order, including order ID, date, net amount,
+    tax, total amount, and status, for the specified `orderid`. It also retrieves
+    the list of products associated with the order.
+
+    Method:
+    -------
+    GET
+    """
+
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
@@ -297,28 +409,27 @@ async def get_order_details(orderid):
                             WHERE orderid = :orderid'''),
                 {'orderid': orderid}
             )
-            order = dict(result.mappings().first())
 
             if result.rowcount == 0:
                 return jsonify({"error": "No orders with that id."}), 404
 
+            order = dict(result.mappings().first())
             result = await session.execute(
-                sql.text('''SELECT p.prod_id, movietitle, year, directorname, p.price, quantity, description, stock 
-                            FROM products as p
-                            NATURAL JOIN imdb_movies 
-                            NATURAL JOIN imdb_directormovies 
-                            NATURAL JOIN imdb_directors
-                            NATURAL JOIN inventory
-                            INNER JOIN orderdetail AS o ON o.prod_id = p.prod_id
-                            WHERE o.orderid = :orderid'''),
-                {'orderid': orderid}
-            )
-
-            products = [dict(row) for row in result.mappings().all()]
+                    sql.text('''SELECT p.prod_id, movietitle, year, directorname, p.price, quantity, description, stock 
+                                FROM products as p
+                                NATURAL JOIN imdb_movies 
+                                NATURAL JOIN imdb_directormovies 
+                                NATURAL JOIN imdb_directors
+                                NATURAL JOIN inventory
+                                INNER JOIN orderdetail AS o ON o.prod_id = p.prod_id
+                                WHERE o.orderid = :orderid'''),
+                    {'orderid': orderid}
+                )
 
             if result.rowcount == 0:            
                 return jsonify({"data": order}), 200
             else:
+                products = [dict(row) for row in result.mappings().all()]
                 return jsonify({"data": {"order": order, "products": products}}), 200
         
     except Exception as e:
@@ -329,6 +440,16 @@ async def get_order_details(orderid):
 
 @app.route('/order/<int:orderid>', methods=['DELETE'])
 async def delete_order(orderid):
+    """
+    Deletes a specific order by order ID.
+
+    This endpoint removes the order with the specified `orderid` from the database.
+
+    Method:
+    -------
+    DELETE
+    """
+
     try:
         async with AsyncSessionLocal() as session:
             result = await session.execute(
@@ -351,6 +472,18 @@ async def delete_order(orderid):
 
 @app.route('/order/<int:orderid>/products', methods=['PUT', 'POST'])
 async def add_product(orderid):
+    """
+    Adds a product to an order.
+
+    This endpoint adds a product to the order with the specified `orderid`.
+    If the product already exists in the order, it updates the quantity;
+    otherwise, it inserts the new product into the order.
+
+    Method:
+    -------
+    PUT, POST
+    """
+
     data = await request.get_json()
 
     try:
@@ -397,6 +530,19 @@ async def add_product(orderid):
 
 @app.route('/order/<int:orderid>/products', methods=['DELETE'])
 async def remove_product(orderid):
+    """
+    Removes a product from an order.
+
+    This endpoint removes a specified quantity of a product from the order with
+    the given `orderid`. If the product quantity in the order is equal to the
+    requested quantity, the product is removed completely. If the requested
+    quantity is less than the existing quantity, it is subtracted.
+
+    Method:
+    -------
+    DELETE
+    """
+
     data = await request.get_json()
 
     try:
@@ -472,6 +618,18 @@ async def remove_product(orderid):
 
 @app.route('/order/<int:orderid>/pay', methods=['POST'])
 async def pay_order(orderid):
+    """
+    Pays for an order by updating its status to 'Paid'.
+
+    This endpoint allows the user to pay for the order with the specified `orderid`.
+    The order must be in a 'Processed' state to be paid. If the order status is not
+    'Processed', it returns an error indicating that the order cannot be paid.
+
+    Method:
+    -------
+    POST
+    """
+
     try:
         # Retrieve the order status
         async with AsyncSessionLocal() as session:
@@ -520,5 +678,4 @@ async def pay_order(orderid):
     
 
 if __name__ == "__main__":
-    app.run(host='localhost', port=int(os.getenv('API_SERVER_PORT')))
-    # app.run(host="api_db", port=int(os.getenv('API_SERVER_PORT')))
+    app.run(host="api_db", port=int(os.getenv('API_SERVER_PORT')))

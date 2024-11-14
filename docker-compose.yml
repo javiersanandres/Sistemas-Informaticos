@@ -1,10 +1,10 @@
 services:
-  api:
+  api_db:
     build:
       context: ./api_server
       dockerfile: ./Dockerfile
     ports:
-      - "127.0.0.1:5015:5000"
+      - "127.0.0.1:5005:5005"
     env_file:
       - ./api_server/.env
     command: python api.py
@@ -19,7 +19,7 @@ services:
       - POSTGRES_DB=si1
       - POSTGRES_USER=alumnodb
     ports:
-      - "127.0.0.1:5005:5432"
+      - "127.0.0.1:5010:5432"
     volumes:
       - ./db_files/db_1/dump_p2_v1.sql.gz:/docker-entrypoint-initdb.d/1_data.sql.gz
 
@@ -31,7 +31,7 @@ services:
       - POSTGRES_DB=si1
       - POSTGRES_USER=alumnodb
     ports:
-      - "127.0.0.1:5010:5432"
+      - "127.0.0.1:5011:5432"
     volumes:
       - ./db_files/db_2/dump_p2_v2.sql.gz:/docker-entrypoint-initdb.d/2_data.sql.gz
 volumes:
