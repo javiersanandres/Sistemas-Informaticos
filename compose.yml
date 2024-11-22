@@ -7,7 +7,7 @@ services:
       - POSTGRES_DB=si1
       - POSTGRES_USER=alumnodb
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5005:5432"
     volumes:
       - ./dump_v1.7-P3.sql.gz:/docker-entrypoint-initdb.d/1_data.sql.gz
   njdb:
