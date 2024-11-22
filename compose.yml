@@ -1,0 +1,24 @@
+services:
+  pgdb:
+    image: postgres:14.8
+    restart: on-failure
+    environment:
+      - POSTGRES_PASSWORD=1234
+      - POSTGRES_DB=si1
+      - POSTGRES_USER=alumnodb
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ./dump_v1.7-P3.sql.gz:/docker-entrypoint-initdb.d/1_data.sql.gz
+  njdb:
+    image: neo4j:5.25.1-community
+    environment:
+      - NEO4J_AUTH=none
+      - NEO4J_PLUGINS=["apoc"]
+    ports:
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
+  mgdb:
+    image: mongo:8.0.3
+    ports:
+      - "127.0.0.1:27017:27017"
