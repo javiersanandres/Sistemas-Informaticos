@@ -40,7 +40,7 @@ async def delete_city_users(city: str) -> Any:
         response = await borraCiudad_wrong_order(city)
     elif intermediate_commit:
         print('[API] Deleting users with intermediate commits...')
-        response = await borraCiudad_intermediate_commit(city)
+        response = await borraCiudad_wrong_order(city, progressive=True)
     else:
         print('[API] Deleting users the correct way...')
         response = await borraCiudad(city)
@@ -95,10 +95,12 @@ async def borraCiudad(city: str) -> Any:
         await session.close()
 
 
-async def borraCiudad_wrong_order(city: str) -> Any:
+async def borraCiudad_wrong_order(city: str, progressive: bool = False) -> Any:
     """
     Deletes all the users from a given city and the information asociated
     to them in the wrong order, causing a rollback to happen.
+
+    The parameter 'progressive' forces intermediate commits to happen.
     """
     session = AsyncSessionLocal()
 
@@ -115,17 +117,26 @@ async def borraCiudad_wrong_order(city: str) -> Any:
         # Get the orders made by the customers that will be deleted
         orders_to_delete = await get_orders_from_customers(session, customers_to_delete)
 
-        # Deleting the customers before the orders will lead to a foreign
-        # key constraint failure
+        # First, delete the order details
+        await delete_orderdetails(session, orders_to_delete)
+        print('[API] Order details associated to the users successfully deleted.')
+
+        if progressive:
+            # Intermediate commit
+            await session.commit()
+            print('[API] Intermediate commit completed. Changes so far are persisted.')
+
+            # Beginning new transaction
+            await session.execute(sql.text('BEGIN'))
+            print('[API] New transaction started after intermediate commit.')
+
+        # Delete the customers (incorrect, should be done after deleting the orders)
         await delete_customers(session, customers_to_delete)
         print(f'[API] Users from {city} successfully deleted.')
 
-        # An error will occur
+        # Try deleting the orders (will cause a foreign key constraint failure)
         await delete_orders(session, orders_to_delete)
         print('[API] Orders associated to the users successfully deleted.')
-
-        await delete_orderdetails(session, orders_to_delete)
-        print('[API] Order details associated to the users successfully deleted.')
 
         # The result won't be committed to the database
         await session.commit()
@@ -141,16 +152,6 @@ async def borraCiudad_wrong_order(city: str) -> Any:
     
     finally:
         await session.close()
-
-
-async def borraCiudad_intermediate_commit(city: str) -> Any:
-    """
-    Deletes all the users from a given city and the information asociated
-    to them with intermediate commits in the process.
-    """
-    print('[API] To be implemented :)')
-
-    return jsonify({'message': 'To be implemented'}), 200
 
 
 async def get_city_customers(session: Any, city: str) -> List:
