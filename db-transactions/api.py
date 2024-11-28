@@ -1,8 +1,10 @@
+from typing import Any, List
 import os
 from dotenv import load_dotenv
-from quart import Quart
+from quart import Quart, jsonify
 import sqlalchemy as sql
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.exc import SQLAlchemyError
 
 
 load_dotenv()
@@ -13,17 +15,17 @@ api_uri = 'http://127.0.0.1:' + api_port
 
 # Quart app and SQLAlchemy connection
 app = Quart(__name__)
-engine = create_async_engine(os.getenv('DATABASE_URI'), execution_options={"autocommit":False})
+engine = create_async_engine(os.getenv('DATABASE_URI'), execution_options={'autocommit': False})
 AsyncSessionLocal = sql.orm.sessionmaker(
     bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 # borraCiudad parameters
-incorrect_order = False
+incorrect_order = True
 intermediate_commit = False
 
 
-@app.route('/borraCiudad/<str:city>', methods=['DELETE'])
-async def delete_city_users(city: str) -> None:
+@app.route('/borraCiudad/<city>', methods=['DELETE'])
+async def delete_city_users(city: str) -> Any:
     """
     Deletes all the users from a given city, and the information asociated
     to them.
@@ -34,21 +36,188 @@ async def delete_city_users(city: str) -> None:
     """
     
     if incorrect_order:
-        borraCiudad_wrong_order(city)
+        print('[API] Deleting users in wrong order...')
+        response = await borraCiudad_wrong_order(city)
     elif intermediate_commit:
-        borraCiudad_intermediate_commit(city)
+        print('[API] Deleting users with intermediate commits...')
+        response = await borraCiudad_intermediate_commit(city)
     else:
-        borraCiudad(city)
+        print('[API] Deleting users the correct way...')
+        response = await borraCiudad(city)
 
-    return
+    return response
 
 
-def borraCiudad(city: str) -> None:
+async def borraCiudad(city: str) -> Any:
     """
     Correct way to delete all the users from a given city and the information
     asociated to them.
     """
+    session = AsyncSessionLocal()
+
+    try:
+        # Get customers to be deleted from the database
+        customers_to_delete = await get_city_customers(session, city)
+
+        print(f'[API] Found {len(customers_to_delete)} customers to be deleted from the database.\n' \
+              '[API] Starting with the deletion of the requested customers...')
+
+        if not customers_to_delete:
+            return jsonify({'message': f'Users from {city} successfully deleted from the database'}), 200
+        
+        # Get the orders made by the customers that will be deleted
+        orders_to_delete = await get_orders_from_customers(session, customers_to_delete)
+
+        # First, delete the order details
+        await delete_orderdetails(session, orders_to_delete)
+        print('[API] Order details associated to the users successfully deleted.')
+
+        # Then, delete the orders made by the customers
+        await delete_orders(session, orders_to_delete)
+        print('[API] Orders associated to the users successfully deleted.')
+        
+        # Finally, delete the customers
+        await delete_customers(session, customers_to_delete)
+        print(f'[API] Users from {city} successfully deleted.')
+
+        await session.commit()
+        return jsonify({'message': f'Users from {city} successfully deleted from the database'}), 200
+
+    except SQLAlchemyError as e:
+        print('[API] An error occurred while deleting the users info from the database: ' + str(e))
+        print('[API] Executing rollback...')
+
+        # Rollback in case of error
+        await session.rollback()
+        return jsonify({'error': 'An error occurred: ' + str(e)}), 500
+    
+    finally:
+        await session.close()
+
+
+async def borraCiudad_wrong_order(city: str) -> Any:
+    """
+    Deletes all the users from a given city and the information asociated
+    to them in the wrong order, causing a rollback to happen.
+    """
+    session = AsyncSessionLocal()
+
+    try:
+        # Get customers to be deleted from the database
+        customers_to_delete = await get_city_customers(session, city)
+        
+        print(f'[API] Found {len(customers_to_delete)} customers to be deleted from the database.\n' \
+              '[API] Starting with the deletion of the requested customers...')
+
+        if not customers_to_delete:
+            return jsonify({'message': f'Users from {city} successfully deleted from the database'}), 200
+        
+        # Get the orders made by the customers that will be deleted
+        orders_to_delete = await get_orders_from_customers(session, customers_to_delete)
+
+        # Deleting the customers before the orders will lead to a foreign
+        # key constraint failure
+        await delete_customers(session, customers_to_delete)
+        print(f'[API] Users from {city} successfully deleted.')
+
+        # An error will occur
+        await delete_orders(session, orders_to_delete)
+        print('[API] Orders associated to the users successfully deleted.')
+
+        await delete_orderdetails(session, orders_to_delete)
+        print('[API] Order details associated to the users successfully deleted.')
+
+        # The result won't be committed to the database
+        await session.commit()
+        return jsonify({'message': f'Users from {city} successfully deleted from the database'}), 200
+
+    except SQLAlchemyError as e:
+        print('[API] An error occurred while deleting the users info from the database: ' + str(e))
+        print('[API] Executing rollback...')
+        
+        # Rollback in case of error
+        await session.rollback()
+        return jsonify({'error': 'An error occurred: ' + str(e)}), 500
+    
+    finally:
+        await session.close()
+
+
+async def borraCiudad_intermediate_commit(city: str) -> Any:
+    """
+    Deletes all the users from a given city and the information asociated
+    to them with intermediate commits in the process.
+    """
+    print('[API] To be implemented :)')
+
+    return jsonify({'message': 'To be implemented'}), 200
+
+
+async def get_city_customers(session: Any, city: str) -> List:
+    """
+    Gets the customers from a given city.
+    """
+    results = await session.execute(
+                sql.text('SELECT c.customerid FROM customers c WHERE c.city = :city'),
+                {'city': city}
+            )
+    
+    return [row['customerid'] for row in results.mappings()]
+
+
+async def get_orders_from_customers(session: Any, customer_ids: List) -> List:
+    """
+    Gets the orders made by the given customers.
+    """
+    results = await session.execute(
+                sql.text('SELECT o.orderid FROM orders o WHERE o.customerid = ANY(:customer_ids)'),
+                {'customer_ids': customer_ids}
+            )
+    
+    return [row['orderid'] for row in results.mappings()]
+
+
+async def delete_orderdetails(session: Any, order_ids: List) -> None:
+    """
+    Deletes the orderdetails associated to the given orders from the database.
+    """
+    try:
+        await session.execute(
+            sql.text('DELETE FROM orderdetail WHERE orderid = ANY(:order_ids)'),
+            {'order_ids': order_ids}
+        )
+    
+    except SQLAlchemyError as e:
+        raise e
+
+
+async def delete_orders(session: Any, order_ids: List) -> None:
+    """
+    Deletes the given orders from the database.
+    """
+    try:
+        await session.execute(
+            sql.text('DELETE FROM orders WHERE orderid = ANY(:order_ids)'),
+            {'order_ids': order_ids}
+        )
+    
+    except SQLAlchemyError as e:
+        raise e
+
+
+async def delete_customers(session: Any, customer_ids: List) -> None:
+    """
+    Deletes the given customers from the database.
+    """
+    try:
+        await session.execute(
+            sql.text('DELETE FROM customers WHERE customerid = ANY(:customer_ids)'),
+            {'customer_ids': customer_ids}
+        )
+    
+    except SQLAlchemyError as e:
+        raise e
 
 
 if __name__ == '__main__':
-    app.run(host='api_db', port=int(api_port))
+    app.run(host='127.0.0.1', port=int(api_port))
