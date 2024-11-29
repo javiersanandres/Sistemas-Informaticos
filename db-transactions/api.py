@@ -1,7 +1,7 @@
 from typing import Any, List
 import os
 from dotenv import load_dotenv
-from quart import Quart, jsonify
+from quart import Quart, jsonify, request
 import sqlalchemy as sql
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -19,10 +19,6 @@ engine = create_async_engine(os.getenv('DATABASE_URI'), execution_options={'auto
 AsyncSessionLocal = sql.orm.sessionmaker(
     bind=engine, class_=AsyncSession, expire_on_commit=False)
 
-# borraCiudad parameters
-incorrect_order = True
-intermediate_commit = False
-
 
 @app.route('/borraCiudad/<city>', methods=['DELETE'])
 async def delete_city_users(city: str) -> Any:
@@ -34,13 +30,22 @@ async def delete_city_users(city: str) -> Any:
     -------
     DELETE
     """
+
+    # Parse parameters that control the execution flow
+    data = await request.get_json()
+    try:
+        wrong_order = data.get('wrong_order', False)
+        progressive = data.get('progressive', False)
+    except TypeError:
+        return jsonify(
+            {"message": "There is something wrong with the request"}), 400
     
-    if incorrect_order:
-        print('[API] Deleting users in wrong order...')
-        response = await borraCiudad_wrong_order(city)
-    elif intermediate_commit:
-        print('[API] Deleting users with intermediate commits...')
-        response = await borraCiudad_wrong_order(city, progressive=True)
+    if wrong_order:
+        if progressive:
+            print('[API] Deleting users in wrong order with intermediate commits...')
+        else:
+            print('[API] Deleting users in wrong order...')
+        response = await borraCiudad_wrong_order(city, progressive=progressive)
     else:
         print('[API] Deleting users the correct way...')
         response = await borraCiudad(city)
