@@ -22,7 +22,7 @@ def get_data_from_sql_database(url: str) -> Tuple[List[Any]]:
     """
     
     # Connect to SQL database
-    engine = sql.create_engine(SQL_DATABASE_URI)
+    engine = sql.create_engine(url)
     Session = sessionmaker(bind=engine)
     session = Session()
     
@@ -60,7 +60,7 @@ def get_best_selling_US_movies(session: Any) -> List[Any]:
                                     WHERE
                                         mc.country = 'USA'
                                     GROUP BY
-                                        m.movieid, m.movietitle, m.year
+                                        m.movieid, m.movietitle
                                     ORDER BY
                                         SUM(i.sales) DESC
                                     LIMIT 20;

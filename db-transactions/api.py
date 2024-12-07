@@ -36,9 +36,11 @@ async def delete_city_users(city: str) -> Any:
     try:
         wrong_order = data.get('wrong_order', False)
         progressive = data.get('progressive', False)
+    except KeyError as e:
+        return jsonify({'message': f'Missing field {str(e)}'}), 400
     except TypeError:
         return jsonify(
-            {"message": "There is something wrong with the request"}), 400
+            {'message': 'There is something wrong with the request'}), 400
     
     if wrong_order:
         if progressive:
@@ -61,6 +63,8 @@ async def borraCiudad(city: str) -> Any:
     session = AsyncSessionLocal()
 
     try:
+        await session.execute(sql.text('BEGIN'))
+        
         # Get customers to be deleted from the database
         customers_to_delete = await get_city_customers(session, city)
 
@@ -110,6 +114,8 @@ async def borraCiudad_wrong_order(city: str, progressive: bool = False) -> Any:
     session = AsyncSessionLocal()
 
     try:
+        await session.execute(sql.text('BEGIN'))
+
         # Get customers to be deleted from the database
         customers_to_delete = await get_city_customers(session, city)
         
