@@ -14,7 +14,7 @@ if __name__ == "__main__":
     r = requests.delete(
         url=api_db_url + f'/borraCiudad/madrid',
         headers={'Content-Type': 'application/json'},
-        data=json.dumps({'wrong_order': False, 'progressive': False})
+        data=json.dumps({'wrong_order': False, 'progressive': False, 'sleep': 0.0})
     )
     print(r.text)
 
@@ -25,7 +25,7 @@ if __name__ == "__main__":
     r = requests.delete(
         url=api_db_url + f'/borraCiudad/{city}',
         headers={'Content-Type': 'application/json'},
-        data=json.dumps({'wrong_order': True, 'progressive': False})
+        data=json.dumps({'wrong_order': True, 'progressive': False, 'sleep': 0.0})
     )
     print(r.text)
 
@@ -34,7 +34,7 @@ if __name__ == "__main__":
     r = requests.delete(
         url=api_db_url + f'/borraCiudad/{city}',
         headers={'Content-Type': 'application/json'},
-        data=json.dumps({'wrong_order': True, 'progressive': True})
+        data=json.dumps({'wrong_order': True, 'progressive': True, 'sleep': 0.0})
     )
     print(r.text)
 
@@ -45,6 +45,6 @@ if __name__ == "__main__":
     r = requests.delete(
         url=api_db_url + f'/borraCiudad/{city}',
         headers={'Content-Type': 'application/json'},
-        data=json.dumps({'wrong_order': False, 'progressive': False})
+        data=json.dumps({'wrong_order': False, 'progressive': False, 'sleep': 0.0})
     )
     print(r.text)
