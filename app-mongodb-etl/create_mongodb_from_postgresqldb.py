@@ -51,9 +51,11 @@ def get_related_movies(conn, movie_id, genres, most_related = True):
         .select_from(
             genres_table.join(movies_table, movies_table.c.movieid == genres_table.c.movieid)
         )
+        .join(countries_table, movies_table.c.movieid == countries_table.c.movieid)
         .where(
             and_(
                 genres_table.c.genre.in_(genres),  # Filter genres
+                countries_table.c.country == 'France', # Only the French related Films
                 genres_table.c.movieid != movie_id  # Exclude the current movie
             )
         )
