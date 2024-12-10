@@ -36,6 +36,7 @@ async def delete_city_users(city: str) -> Any:
     try:
         wrong_order = data.get('wrong_order', False)
         progressive = data.get('progressive', False)
+        sleep = float(data.get('sleep', 0.0))
     except KeyError as e:
         return jsonify({'message': f'Missing field {str(e)}'}), 400
     except TypeError:
@@ -50,12 +51,12 @@ async def delete_city_users(city: str) -> Any:
         response = await borraCiudad_wrong_order(city, progressive=progressive)
     else:
         print('[API] Deleting users the correct way...')
-        response = await borraCiudad(city)
+        response = await borraCiudad(city, sleep)
 
     return response
 
 
-async def borraCiudad(city: str) -> Any:
+async def borraCiudad(city: str, sleep: float) -> Any:
     """
     Correct way to delete all the users from a given city and the information
     asociated to them.
@@ -88,6 +89,12 @@ async def borraCiudad(city: str) -> Any:
         # Finally, delete the customers
         await delete_customers(session, customers_to_delete)
         print(f'[API] Users from {city} successfully deleted.')
+
+        # SLEEP AQUI
+        if sleep > 0.0:
+            await session.execute(sql.text('SELECT pg_sleep(:sleep)'),
+                                  {'sleep': sleep}
+                                )
 
         await session.commit()
         return jsonify({'message': f'Users from {city} successfully deleted from the database'}), 200
