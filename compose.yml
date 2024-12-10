@@ -1,4 +1,15 @@
 services:
+  api_db:
+    build:
+      context: ./db-transactions
+      dockerfile: ./Dockerfile
+    ports:
+      - "127.0.0.1:5010:5010"
+    env_file:
+      - ./db-transactions/.env
+    command: python api.py
+    depends_on:
+      - pgdb
   pgdb:
     image: postgres:14.8
     restart: on-failure
