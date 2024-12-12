@@ -47,7 +47,7 @@ def get_best_selling_US_movies(session: Any) -> List[Any]:
     """
     best_selling_US_movies_query = sql.text("""
                                     SELECT
-                                        m.movieid as movie_id,
+                                        m.movieid AS movie_id,
                                         m.movietitle AS title
                                     FROM
                                         imdb_movies m
@@ -60,7 +60,7 @@ def get_best_selling_US_movies(session: Any) -> List[Any]:
                                     WHERE
                                         mc.country = 'USA'
                                     GROUP BY
-                                        m.movieid, m.movietitle
+                                        m.movieid
                                     ORDER BY
                                         SUM(i.sales) DESC
                                     LIMIT 20;
@@ -167,8 +167,8 @@ def add_actors(actors_data: List[Any], session: Any) -> None:
     for actor in actors_data:
         session.run("""
                     MATCH (m: Movie{movieId: $movie_id})
-                    CREATE (a: Actor: Person {actorId: $actor_id, name: $name})
-                    CREATE (a)-[:ACTED_IN]->(m)
+                    MERGE (a: Actor: Person {actorId: $actor_id, name: $name})
+                    MERGE (a)-[:ACTED_IN]->(m)
                     """,
                     movie_id=int(actor['movie_id']), actor_id=int(actor['actor_id']),
                     name=actor['name']
