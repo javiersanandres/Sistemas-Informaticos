@@ -11,4 +11,6 @@ WITH COLLECT(a) AS didnt_work_with_winston, worked_with_winston
 // worked with some third actor in common.
 MATCH (a:Actor)-[:ACTED_IN]->(n:Movie)<-[:ACTED_IN]-(third:Actor)
 WHERE a IN didnt_work_with_winston AND third IN worked_with_winston
+ORDER BY a.name
+LIMIT 10
 RETURN a;
