@@ -45,12 +45,12 @@ async def delete_city_users(city: str) -> Any:
     
     if wrong_order:
         if progressive:
-            print('[API] Deleting users in wrong order with intermediate commits...')
+            print('[API] Deleting users in wrong order with intermediate commits...', flush=True)
         else:
-            print('[API] Deleting users in wrong order...')
+            print('[API] Deleting users in wrong order...', flush=True)
         response = await borraCiudad_wrong_order(city, progressive=progressive)
     else:
-        print('[API] Deleting users the correct way...')
+        print('[API] Deleting users the correct way...', flush=True)
         response = await borraCiudad(city, sleep)
 
     return response
@@ -70,7 +70,7 @@ async def borraCiudad(city: str, sleep: float) -> Any:
         customers_to_delete = await get_city_customers(session, city)
 
         print(f'[API] Found {len(customers_to_delete)} customers to be deleted from the database.\n' \
-              '[API] Starting with the deletion of the requested customers...')
+              '[API] Starting with the deletion of the requested customers...', flush=True)
 
         if not customers_to_delete:
             return jsonify({'message': f'Users from {city} successfully deleted from the database'}), 200
@@ -80,28 +80,40 @@ async def borraCiudad(city: str, sleep: float) -> Any:
 
         # First, delete the order details
         await delete_orderdetails(session, orders_to_delete)
-        print('[API] Order details associated to the users successfully deleted.')
+        print('[API] Order details associated to the users successfully deleted.', flush=True)
 
         # Then, delete the orders made by the customers
         await delete_orders(session, orders_to_delete)
-        print('[API] Orders associated to the users successfully deleted.')
-        
-        # Finally, delete the customers
-        await delete_customers(session, customers_to_delete)
-        print(f'[API] Users from {city} successfully deleted.')
+        print('[API] Orders associated to the users successfully deleted.', flush=True)
 
-        # SLEEP AQUI
+        """
+        # We sleep here for deadlock
         if sleep > 0.0:
+            print(f"[API] Sleeping for {sleep} seconds...", flush=True)
             await session.execute(sql.text('SELECT pg_sleep(:sleep)'),
                                   {'sleep': sleep}
-                                )
+                                  )
+            print(f"[API] Sleep of {sleep} seconds finished", flush=True)
+        """
+
+        # Finally, delete the customers
+        await delete_customers(session, customers_to_delete)
+        print(f'[API] Users from {city} successfully deleted.', flush=True)
+
+        # We sleep here for blocking related purposes
+        if sleep > 0.0:
+            print(f"[API] Sleeping for {sleep} seconds...", flush=True)
+            await session.execute(sql.text('SELECT pg_sleep(:sleep)'),
+                                  {'sleep': sleep}
+                                  )
+            print(f"[API] Sleep of {sleep} seconds finished", flush=True)
 
         await session.commit()
         return jsonify({'message': f'Users from {city} successfully deleted from the database'}), 200
 
     except SQLAlchemyError as e:
-        print('[API] An error occurred while deleting the users info from the database: ' + str(e))
-        print('[API] Executing rollback...')
+        print('[API] An error occurred while deleting the users info from the database: ' + str(e), flush=True)
+        print('[API] Executing rollback...', flush=True)
 
         # Rollback in case of error
         await session.rollback()
